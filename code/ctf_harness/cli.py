@@ -1,7 +1,5 @@
 """Command-line interface for the Hermes CTF reversing harness."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys
@@ -10,12 +8,11 @@ from typing import Any
 
 from . import __version__
 from .analysis import Analyzer
-from .config import Settings
+from .config import PROFILES, Settings
 from .dashboard import build_dashboard
 from .docker_backend import BackendError, DockerWorker
 from .importer import ChallengeImporter
 from .memory import TechniqueMemory
-from .models import PROFILES
 from .storage import ChallengeStore, public_state
 from .writeup import WriteupManager
 
@@ -89,8 +86,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = Settings.load(PROJECT_ROOT)
         store = ChallengeStore(PROJECT_ROOT / "runs")
-        importer = ChallengeImporter(store)
-        memory = TechniqueMemory(PROJECT_ROOT, store)
         if args.action == "doctor":
             docker: dict[str, Any]
             try:
@@ -111,14 +106,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.action == "import-local":
             description = args.description_file.read_text(encoding="utf-8") if args.description_file else ""
-            state = importer.import_local(title=args.title, files=args.file, platform_url=args.url, event=args.event, description=description)
+            state = ChallengeImporter(store).import_local(title=args.title, files=args.file, platform_url=args.url, event=args.event, description=description)
             emit(visible(state, settings))
             return 0
         if args.action == "dashboard":
             emit({"dashboard": str(build_dashboard(PROJECT_ROOT, store))})
             return 0
         if args.action == "solution-search":
-            local_results = memory.search_for_challenge(
+            local_results = TechniqueMemory(PROJECT_ROOT, store).search_for_challenge(
                 args.challenge_id,
                 args.query,
                 settings.research_after_seconds,
@@ -130,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
             })
             return 0
         if args.action == "learn":
-            emit({"saved_path": str(memory.save_lesson(
+            emit({"saved_path": str(TechniqueMemory(PROJECT_ROOT, store).save_lesson(
                 args.challenge_id, args.file.read_text(encoding="utf-8")
             ))})
             return 0

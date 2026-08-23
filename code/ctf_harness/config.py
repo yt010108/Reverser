@@ -1,18 +1,16 @@
 """Project configuration loading and validation."""
 
-from __future__ import annotations
-
 import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
-from .models import PROFILES
 
 
 class ConfigError(ValueError):
     """Raised when project configuration is invalid."""
+
+
+PROFILES = ("core", "dynamic", "ghidra", "angr")
 
 
 @dataclass(frozen=True, slots=True)

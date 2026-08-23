@@ -1,7 +1,5 @@
 """Solution notes for challenges that exceeded the direct-solve budget."""
 
-from __future__ import annotations
-
 import re
 import sqlite3
 from pathlib import Path

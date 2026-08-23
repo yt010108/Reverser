@@ -1,7 +1,5 @@
 """Locked, ephemeral Docker workers for CTF reversing."""
 
-from __future__ import annotations
-
 import os
 import re
 import shutil
@@ -10,8 +8,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import Settings
-from .models import PROFILES
+from .config import PROFILES, Settings
 
 
 class BackendError(RuntimeError):

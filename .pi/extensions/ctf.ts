@@ -14,6 +14,184 @@ const browserDownloads = resolve(projectRoot, ".private/browser-downloads");
 let browserContext: BrowserContext | undefined;
 let browserPage: Page | undefined;
 
+type AgentRole = "solver" | "reviewer";
+type AgentRun = {
+  exitCode: number;
+  finalText: string;
+  stderr: string;
+  turns: number;
+  model?: string;
+};
+
+// Child agents get only the harness tools needed for their role. In particular,
+// they cannot open another browser or recursively dispatch more agents.
+const AGENT_TOOLS: Record<AgentRole, string[]> = {
+  solver: [
+    "read", "write", "edit", "grep", "find", "ls",
+    "ctf_status", "ctf_triage", "ctf_exec", "ctf_record_flag",
+    "ctf_writeup", "ctf_solution_search", "ctf_mark_unsolved", "ctf_learn",
+  ],
+  reviewer: [
+    "read", "write", "edit", "grep", "find", "ls",
+    "ctf_status", "ctf_exec", "ctf_record_flag", "ctf_writeup",
+    "ctf_solution_search", "ctf_mark_unsolved", "ctf_learn",
+  ],
+};
+
+function elapsedText(milliseconds: number) {
+  const seconds = Math.max(0, milliseconds / 1_000);
+  if (seconds < 60) return `${seconds.toFixed(1)}초`;
+  return `${Math.floor(seconds / 60)}분 ${Math.floor(seconds % 60)}초`;
+}
+
+function describeAgentTool(toolName: string, args: unknown) {
+  const input = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+  if (toolName === "ctf_exec") {
+    const command = typeof input.command === "string" ? input.command : "";
+    let action = "분석 명령";
+    if (/\b(?:r2|radare2|rabin2)\b/i.test(command)) action = "radare2 정적 분석";
+    else if (/\bctf-ghidra\b|\bghidra(?:-headless)?\b/i.test(command)) action = "Ghidra 관심 함수 디컴파일";
+    else if (/\b(?:gdb|gdbserver)\b/i.test(command)) action = "GDB 동적 분석";
+    else if (/\b(?:strace|ltrace|frida)\b/i.test(command)) action = "런타임 추적";
+    else if (/\bangr\b/i.test(command)) action = "angr 심볼릭 실행";
+    else if (/\bstrings\b/i.test(command)) action = "문자열 분석";
+    else if (/\b(?:file|checksec|readelf|objdump|nm)\b/i.test(command)) action = "바이너리 구조 확인";
+    else if (/\bpython3?\b/i.test(command)) action = "Python 검증 스크립트";
+    return `${typeof input.profile === "string" ? input.profile : "worker"} · ${action}`;
+  }
+  const path = String(input.path ?? input.file_path ?? "파일")
+    .replaceAll("\\", "/").split("/").slice(-2).join("/");
+  switch (toolName) {
+    case "ctf_triage": return "core · 정적 triage";
+    case "ctf_status": return "문제 상태 확인";
+    case "ctf_record_flag": return "플래그 후보 로컬 기록";
+    case "ctf_writeup": return "Write-up 저장";
+    case "ctf_solution_search": return "풀이 방법 검색";
+    case "ctf_mark_unsolved": return "미해결 사유 기록";
+    case "ctf_learn": return "재사용 기법 저장";
+    case "read": return `아티팩트 읽기 · ${path}`;
+    case "write": return `결과 작성 · ${path}`;
+    case "edit": return `결과 수정 · ${path}`;
+    case "grep": return "아티팩트 패턴 검색";
+    case "find": return "아티팩트 파일 탐색";
+    case "ls": return "아티팩트 목록 확인";
+    default: return toolName;
+  }
+}
+
+function runPiAgent(
+  role: AgentRole,
+  challengeId: string,
+  signal: AbortSignal | undefined,
+  onUpdate: ((value: any) => void) | undefined,
+  context: { model?: { provider: string; id: string }; thinkingLevel?: string },
+): Promise<AgentRun> {
+  const prompt = resolve(projectRoot, ".pi", "agents", `${role}.md`);
+  const args = [
+    "--mode", "json", "-p", "--no-session", "--approve",
+    "--tools", AGENT_TOOLS[role].join(","),
+    "--append-system-prompt", prompt,
+  ];
+  const model = context.model ? `${context.model.provider}/${context.model.id}` : undefined;
+  if (model) args.push("--model", model);
+  if (context.thinkingLevel) args.push("--thinking", context.thinkingLevel);
+  args.push(`CTF challenge_id: ${challengeId}`);
+
+  const cli = process.argv[1];
+  const command = cli ? process.execPath : process.platform === "win32" ? "pi.cmd" : "pi";
+  const childArgs = cli ? [cli, ...args] : args;
+  return new Promise<AgentRun>((resolvePromise, reject) => {
+    const child = spawn(command, childArgs, {
+      cwd: projectRoot,
+      env: process.env,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let buffer = "";
+    let stderr = "";
+    let finalText = "";
+    let turns = 0;
+    let childModel = model;
+    const agentStartedAt = Date.now();
+    let running: { description: string; startedAt: number } | undefined;
+    const roleLabel = role === "solver" ? "Solver" : "Reviewer";
+
+    const publish = (status: string) => onUpdate?.({
+      content: [{ type: "text", text: `[${roleLabel}] ${status}` }],
+      details: { role, challengeId, turns, model: childModel },
+    });
+    const consume = (line: string) => {
+      if (!line.trim()) return;
+      try {
+        const event = JSON.parse(line) as {
+          type?: string;
+          message?: unknown;
+          toolName?: string;
+          args?: unknown;
+          isError?: boolean;
+          result?: unknown;
+        };
+        if (event.type === "tool_execution_start" && event.toolName) {
+          const description = describeAgentTool(event.toolName, event.args);
+          running = { description, startedAt: Date.now() };
+          publish(`${description} · 실행 중`);
+          return;
+        }
+        if (event.type === "tool_execution_end") {
+          const description = running?.description ?? describeAgentTool(event.toolName ?? "tool", event.args);
+          const elapsed = elapsedText(Date.now() - (running?.startedAt ?? Date.now()));
+          const exitCode = (event.result as { details?: { data?: { exit_code?: number } } } | undefined)?.details?.data?.exit_code;
+          const failed = event.isError || (typeof exitCode === "number" && exitCode !== 0);
+          running = undefined;
+          publish(`${description} · ${failed ? "실패" : "완료"} · ${elapsed}`);
+          return;
+        }
+        if (event.type !== "message_end" || !event.message) return;
+        const message = event.message as { role?: string; model?: string; content?: Array<{ type?: string; text?: string }> };
+        if (message.role !== "assistant") return;
+        turns += 1;
+        childModel = childModel ?? message.model;
+        const parts = Array.isArray(message.content) ? message.content : [];
+        const text = parts.filter((part) => part.type === "text" && part.text).map((part) => part.text).join("\n").trim();
+        if (text) finalText = text;
+        if (!parts.some((part) => part.type === "toolCall")) publish(`${text ? "풀이 정리 중" : "추론 중"} · ${turns}턴`);
+      } catch {
+        // JSON mode can still emit non-event diagnostics; stderr captures errors.
+      }
+    };
+    const heartbeat = setInterval(() => {
+      if (running) publish(`${running.description} · 실행 중 · ${elapsedText(Date.now() - running.startedAt)}`);
+    }, 10_000);
+    publish("에이전트 시작");
+    const abort = () => child.kill();
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) consume(line);
+    });
+    child.stderr.on("data", (chunk: string) => {
+      if (stderr.length < 16_384) stderr += chunk;
+    });
+    child.on("error", (error) => {
+      clearInterval(heartbeat);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearInterval(heartbeat);
+      signal?.removeEventListener("abort", abort);
+      consume(buffer);
+      publish(`에이전트 ${code === 0 ? "완료" : "종료"} · ${elapsedText(Date.now() - agentStartedAt)}`);
+      resolvePromise({ exitCode: code ?? 1, finalText, stderr: stderr.trim(), turns, model: childModel });
+    });
+  });
+}
+
 async function playwrightPage() {
   if (!browserContext) {
     mkdirSync(browserProfile, { recursive: true });
@@ -36,17 +214,12 @@ async function playwrightPage() {
 
 type CliResult = { exitCode: number; stdout: string; stderr: string; parsed?: unknown };
 
-function invocation(args: string[]) {
-  return process.platform === "win32"
-    ? { command: "py", args: ["-3", "-m", "ctf_harness.cli", ...args] }
-    : { command: "python3", args: ["-m", "ctf_harness.cli", ...args] };
-}
-
 function runCli(args: string[], signal?: AbortSignal): Promise<CliResult> {
-  const call = invocation(args);
+  const command = process.platform === "win32" ? "py" : "python3";
+  const commandArgs = process.platform === "win32" ? ["-3", "-m", "ctf_harness.cli", ...args] : ["-m", "ctf_harness.cli", ...args];
   return new Promise((resolvePromise, reject) => {
     const pythonPath = [resolve(projectRoot, "code"), process.env.PYTHONPATH].filter(Boolean).join(delimiter);
-    const child = spawn(call.command, call.args, { cwd: projectRoot, env: { ...process.env, PYTHONPATH: pythonPath }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, commandArgs, { cwd: projectRoot, env: { ...process.env, PYTHONPATH: pythonPath }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => { stdout += chunk; });
@@ -69,6 +242,13 @@ function result(value: CliResult) {
 }
 
 export default function (pi: ExtensionAPI) {
+  pi.on("session_shutdown", async () => {
+    const context = browserContext;
+    browserContext = undefined;
+    browserPage = undefined;
+    if (context) await context.close().catch(() => undefined);
+  });
+
   pi.on("tool_call", async (event) => {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
@@ -79,7 +259,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "ctf_browser", label: "CTF: Playwright", description: "Run ordinary Playwright JavaScript with the persistent page and context. The visible browser stays open across calls. Available variables: page, context, downloadsDir, projectRoot.",
+    name: "ctf_browser", label: "CTF: Playwright", description: "Run ordinary Playwright JavaScript with the persistent page and context. Await or return every Playwright promise so errors are returned by this tool. Variables: page, context, downloadsDir, projectRoot.",
     parameters: Type.Object({ code: Type.String() }),
     async execute(_id, p, _signal, _onUpdate, _ctx) {
       try {
@@ -145,5 +325,63 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "ctf_dashboard", label: "CTF: 대시보드", description: "Generate one local read-only dashboard.html file.", parameters: Type.Object({}),
     async execute(_id, _p, signal, _onUpdate, _ctx) { return result(await runCli(["dashboard"], signal)); },
+  });
+  pi.registerTool({
+    name: "ctf_solve", label: "CTF: 풀이 오케스트레이션", description: "Solve one imported challenge in an isolated Pi context, then automatically run a fresh reviewer when solved, unsolved, or research-due.",
+    parameters: Type.Object({ challenge_id: Type.String() }),
+    async execute(_id, p, signal, onUpdate, ctx) {
+      const current = await runCli(["status", p.challenge_id], signal);
+      if (current.exitCode !== 0) return result(current);
+      const solver = await runPiAgent("solver", p.challenge_id, signal, onUpdate, ctx);
+      const after = await runCli(["status", p.challenge_id], signal);
+      const state = after.parsed as { status?: string; research_due?: boolean } | undefined;
+      const reviewable = state?.status === "solved" || state?.status === "unsolved" || state?.research_due === true;
+      const reviewer = after.exitCode === 0 && reviewable
+        ? await runPiAgent("reviewer", p.challenge_id, signal, onUpdate, ctx)
+        : undefined;
+      const solverText = solver.finalText || solver.stderr || "출력 없음";
+      const sections = [`## Solver\n${solverText.slice(0, 4_000)}${solverText.length > 4_000 ? "\n[이후 요약 생략]" : ""}`];
+      if (reviewer) {
+        const reviewerText = reviewer.finalText || reviewer.stderr || "출력 없음";
+        sections.push(`## Reviewer\n${reviewerText.slice(0, 4_000)}${reviewerText.length > 4_000 ? "\n[이후 요약 생략]" : ""}`);
+      }
+      else sections.push("## Reviewer\n조건이 되지 않아 실행하지 않음.");
+      const failed = solver.exitCode !== 0 && (!reviewer || reviewer.exitCode !== 0);
+      return {
+        content: [{ type: "text" as const, text: sections.join("\n\n") }],
+        details: {
+          challengeId: p.challenge_id,
+          solver: { exitCode: solver.exitCode, turns: solver.turns, model: solver.model },
+          reviewer: reviewer ? { exitCode: reviewer.exitCode, turns: reviewer.turns, model: reviewer.model } : null,
+        },
+        isError: failed,
+      };
+    },
+  });
+  pi.registerTool({
+    name: "ctf_review", label: "CTF: 독립 Reviewer", description: "Review a solved, unsolved, or research-due challenge in a fresh Pi context. Active attempts under 30 minutes are skipped.",
+    parameters: Type.Object({ challenge_id: Type.String() }),
+    async execute(_id, p, signal, onUpdate, ctx) {
+      const current = await runCli(["status", p.challenge_id], signal);
+      if (current.exitCode !== 0) return result(current);
+      const state = current.parsed as { status?: string; research_due?: boolean } | undefined;
+      const reviewable = state?.status === "solved" || state?.status === "unsolved" || state?.research_due === true;
+      if (!reviewable) {
+        return {
+          content: [{ type: "text" as const, text: "Reviewer 조건이 아닙니다: 풀이 30분 이내의 활성 문제입니다." }],
+          details: { role: "reviewer", challengeId: p.challenge_id, skipped: true },
+        };
+      }
+      const reviewer = await runPiAgent("reviewer", p.challenge_id, signal, onUpdate, ctx);
+      const failed = reviewer.exitCode !== 0;
+      const text = failed
+        ? `reviewer 실행 실패 (exit ${reviewer.exitCode})\n${reviewer.stderr || reviewer.finalText || "출력 없음"}`
+        : reviewer.finalText || "reviewer 완료";
+      return {
+        content: [{ type: "text" as const, text }],
+        details: { role: "reviewer", challengeId: p.challenge_id, exitCode: reviewer.exitCode, turns: reviewer.turns, model: reviewer.model },
+        isError: failed,
+      };
+    },
   });
 }

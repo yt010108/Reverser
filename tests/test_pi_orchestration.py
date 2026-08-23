@@ -1,0 +1,51 @@
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class PiOrchestrationTests(unittest.TestCase):
+    def test_browser_uses_raw_playwright_and_catches_awaited_errors(self):
+        extension = (ROOT / ".pi" / "extensions" / "ctf.ts").read_text(encoding="utf-8")
+
+        self.assertNotIn("downloadHelper", extension)
+        self.assertNotIn("guardedEvents", extension)
+        self.assertIn("await run(page, context, browserDownloads, projectRoot)", extension)
+        self.assertIn("catch (error)", extension)
+        self.assertIn('pi.on("session_shutdown"', extension)
+        self.assertIn("await context.close().catch", extension)
+
+    def test_solver_and_reviewer_use_ephemeral_child_pi(self):
+        extension = (ROOT / ".pi" / "extensions" / "ctf.ts").read_text(encoding="utf-8")
+
+        self.assertIn('name: "ctf_solve"', extension)
+        self.assertIn('name: "ctf_review"', extension)
+        self.assertIn('"--mode", "json", "-p", "--no-session", "--approve"', extension)
+        self.assertIn('"--tools", AGENT_TOOLS[role].join(",")', extension)
+        self.assertIn('state?.status === "solved"', extension)
+        self.assertIn('state?.status === "unsolved"', extension)
+        self.assertIn("state?.research_due === true", extension)
+        self.assertIn('runPiAgent("reviewer"', extension)
+        self.assertIn("slice(0, 4_000)", extension)
+        self.assertIn('event.type === "tool_execution_start"', extension)
+        self.assertIn('event.type === "tool_execution_end"', extension)
+        self.assertIn("elapsedText", extension)
+        self.assertIn("setInterval", extension)
+        self.assertIn("const failed = event.isError ||", extension)
+
+    def test_child_agents_are_scoped_and_do_not_receive_browser(self):
+        extension = (ROOT / ".pi" / "extensions" / "ctf.ts").read_text(encoding="utf-8")
+        solver_block = extension.split("solver: [", 1)[1].split("],", 1)[0]
+        reviewer_block = extension.split("reviewer: [", 1)[1].split("],", 1)[0]
+
+        self.assertIn('"ctf_exec"', solver_block)
+        self.assertNotIn('"ctf_browser"', solver_block)
+        self.assertNotIn('"ctf_solve"', solver_block)
+        self.assertNotIn('"ctf_browser"', reviewer_block)
+        self.assertTrue((ROOT / ".pi" / "agents" / "solver.md").is_file())
+        self.assertTrue((ROOT / ".pi" / "agents" / "reviewer.md").is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

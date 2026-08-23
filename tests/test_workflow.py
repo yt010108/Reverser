@@ -74,7 +74,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(projected["flag_candidates"], 1)
 
     def test_solution_notes_are_only_for_researched_or_unsolved_challenges(self):
-        state = self.store.create(title="Memory Test", platform_url="", source="test")
+        state = self.store.create(title="Memory Test", platform_url="")
         memory = TechniqueMemory(self.root, self.store)
         with self.assertRaises(MemoryError):
             memory.save_lesson(state["challenge_id"], CARD)
@@ -89,7 +89,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(memory.search("XOR"))
 
     def test_solution_search_waits_for_budget_or_unsolved_status(self):
-        state = self.store.create(title="Search Test", platform_url="", source="test")
+        state = self.store.create(title="Search Test", platform_url="")
         state["status"] = "solving"
         state["solve_started_at"] = state["created_at"]
         self.store.save(state)
@@ -107,7 +107,7 @@ class WorkflowTests(unittest.TestCase):
             def run(self, *, profile, command, **_kwargs):
                 return CommandResult(profile, command, 0, "ok", "")
 
-        state = self.store.create(title="Direct Solve", platform_url="", source="test")
+        state = self.store.create(title="Direct Solve", platform_url="")
         analyzer = Analyzer(self.store, Worker())
         with self.assertRaises(RuntimeError):
             analyzer.run_command(state["challenge_id"], "core", "strings sample")
@@ -121,7 +121,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(updated["status"], "solving")
 
     def test_writeup_keeps_private_and_redacts_export(self):
-        state = self.store.create(title="Writeup Test", platform_url="https://ctf.example/challenge", source="test")
+        state = self.store.create(title="Writeup Test", platform_url="https://ctf.example/challenge")
         flag = "TEST" + "{private-value}"
         state["flags"].append(flag)
         self.store.save(state)

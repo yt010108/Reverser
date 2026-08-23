@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Deterministic, non-executing first-pass file triage."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import math

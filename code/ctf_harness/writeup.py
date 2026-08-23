@@ -1,9 +1,6 @@
 """Private and Git-safe CTF write-up handling."""
 
-from __future__ import annotations
-
 from pathlib import Path
-from typing import Any
 
 from .security import redact_flags, slug
 from .storage import ChallengeStore, atomic_write_json

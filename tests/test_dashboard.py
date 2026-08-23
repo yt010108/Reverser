@@ -11,7 +11,7 @@ class DashboardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             store = ChallengeStore(root / "runs")
-            state = store.create(title="Dashboard", platform_url="", source="test")
+            state = store.create(title="Dashboard", platform_url="")
             flag = "TEST" + "{private}"
             state["flags"] = [flag]
             store.save(state)

@@ -1,7 +1,5 @@
 """서버 없이 열어 보는 단일 HTML 대시보드."""
 
-from __future__ import annotations
-
 from html import escape
 from pathlib import Path
 

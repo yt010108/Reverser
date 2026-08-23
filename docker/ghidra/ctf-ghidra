@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: ctf-ghidra PROGRAM OUTPUT [FUNCTION_OR_ADDRESS ... | --all]" >&2
+  exit 2
+fi
+
+program="$(realpath "$1")"
+output="$2"
+shift 2
+
+project_dir=/challenge/work/ghidra-project
+project_name=ctf
+program_name="$(basename "$program")"
+program_sha="$(sha256sum "$program" | cut -d' ' -f1)"
+marker="$project_dir/.imported-$program_sha"
+
+mkdir -p "$project_dir" "$(dirname "$output")"
+
+if [[ -f "$marker" ]]; then
+  mode=(-process "$program_name" -noanalysis)
+else
+  mode=(-import "$program")
+fi
+
+ghidra-headless "$project_dir" "$project_name" \
+  "${mode[@]}" \
+  -scriptPath /opt/ghidra_scripts \
+  -postScript ExportDecompile.java "$output" "$@"
+
+touch "$marker"

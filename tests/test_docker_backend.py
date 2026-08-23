@@ -9,6 +9,16 @@ from ctf_harness.docker_backend import DockerWorker
 
 
 class DockerBackendTests(unittest.TestCase):
+    def test_ghidra_wrapper_reuses_project_and_limits_default_export(self):
+        root = Path(__file__).resolve().parents[1]
+        wrapper = (root / "docker" / "ghidra" / "ctf-ghidra").read_text(encoding="utf-8")
+        script = (root / "docker" / "ghidra" / "ExportDecompile.java").read_text(encoding="utf-8")
+
+        self.assertIn('-process "$program_name" -noanalysis', wrapper)
+        self.assertIn("DEFAULT_FUNCTION_LIMIT = 20", script)
+        self.assertIn("DECOMPILE_TIMEOUT_SECONDS = 20", script)
+        self.assertIn('"--all"', script)
+
     def test_worker_is_networkless_and_ptrace_is_dynamic_only(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -1,13 +1,11 @@
 """Challenge triage and isolated worker command orchestration."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import Any
 
+from .config import PROFILES
 from .docker_backend import CommandResult, DockerWorker
-from .models import PROFILES
 from .storage import ChallengeStore, utc_now
 
 

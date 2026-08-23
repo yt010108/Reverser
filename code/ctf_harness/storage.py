@@ -1,7 +1,5 @@
 """문제 파일과 progress.md 하나로 상태를 보존한다."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os
@@ -90,12 +88,10 @@ class ChallengeStore:
         title: str,
         platform_url: str,
         event: str = "",
-        source: str = "manual",
-        external_id: str = "",
     ) -> dict[str, Any]:
         challenge_id = f"{slug(title)}-{uuid.uuid4().hex[:8]}"
         root = self.challenge_dir(challenge_id)
-        for name in ("original", "work", "output", "reports", "memory"):
+        for name in ("original", "work", "output", "reports"):
             (root / name).mkdir(parents=True)
         state: dict[str, Any] = {
             "challenge_id": challenge_id,
@@ -105,8 +101,6 @@ class ChallengeStore:
             "architecture": None,
             "bits": None,
             "platform_url": platform_url,
-            "source": source,
-            "external_id": external_id,
             "status": "importing",
             "created_at": utc_now(),
             "updated_at": utc_now(),

@@ -15,6 +15,8 @@ RUN curl -fsSL "https://github.com/NationalSecurityAgency/ghidra/releases/downlo
  && ln -s /opt/ghidra/support/analyzeHeadless /usr/local/bin/ghidra-headless \
  && rm /tmp/ghidra.zip
 COPY ExportDecompile.java /opt/ghidra_scripts/ExportDecompile.java
+COPY ctf-ghidra /usr/local/bin/ctf-ghidra
+RUN chmod 0755 /usr/local/bin/ctf-ghidra
 ENV GHIDRA_HOME=/opt/ghidra
 USER analyst
 CMD ["bash"]
