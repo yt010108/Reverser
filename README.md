@@ -50,7 +50,7 @@ $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1"
 npm install
 ```
 
-Pi의 `ctf_browser`에는 Playwright의 `page`와 `context`가 그대로 전달된다. 별도 클릭 래퍼나 CTFd API 가정은 없다.
+Pi의 `ctf_browser`에는 Playwright의 `page`와 `context`가 그대로 전달된다.
 
 ```javascript
 await page.goto("https://ctf.example/challenges");
