@@ -1,0 +1,21 @@
+[project]
+name = "Hermes CTF Reverse Harness"
+
+[solve]
+research_after_seconds = 1800
+
+[images]
+core = "local/hermes-ctf-reverse-core:0.1"
+dynamic = "local/hermes-ctf-reverse-dynamic:0.1"
+ghidra = "local/hermes-ctf-reverse-ghidra:0.1"
+angr = "local/hermes-ctf-reverse-angr:0.1"
+
+[limits]
+timeout_seconds = 900
+memory = "4g"
+cpus = "2"
+pids = 512
+max_output_bytes = 2097152
+
+[memory]
+search_limit = 5

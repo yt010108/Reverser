@@ -1,0 +1,27 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from ctf_harness.dashboard import build_dashboard
+from ctf_harness.storage import ChallengeStore
+
+
+class DashboardTests(unittest.TestCase):
+    def test_single_html_dashboard_does_not_expose_flags(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            store = ChallengeStore(root / "runs")
+            state = store.create(title="Dashboard", platform_url="", source="test")
+            flag = "TEST" + "{private}"
+            state["flags"] = [flag]
+            store.save(state)
+
+            dashboard = build_dashboard(root, store)
+            text = dashboard.read_text(encoding="utf-8")
+            self.assertIn("Dashboard", text)
+            self.assertIn("1", text)
+            self.assertNotIn(flag, text)
+
+
+if __name__ == "__main__":
+    unittest.main()
