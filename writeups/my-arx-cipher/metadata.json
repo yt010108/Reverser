@@ -1,0 +1,26 @@
+{
+  "title": "My ARX Cipher",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "my-arx-cipher-69705a60",
+  "attachments": [
+    {
+      "name": "encryptor",
+      "size": 14472,
+      "sha256": "1aa48fd2b89f99acedb416b08200f25da1e636b3d792990cdf5f1909e25157a7"
+    },
+    {
+      "name": "flag.enc",
+      "size": 72,
+      "sha256": "0630f7ae9ea993a7b0873a89d2994f2aaa5f8e809f1325f80718d9a192cabc2f"
+    },
+    {
+      "name": "key",
+      "size": 12,
+      "sha256": "a1a0d6bb5445be1206d2839ed5121c69744bf1dbc7de84bdf60c97f73cf85090"
+    }
+  ]
+}

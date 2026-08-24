@@ -1,0 +1,31 @@
+{
+  "title": "baseball",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "baseball-654d1402",
+  "attachments": [
+    {
+      "name": "baseball",
+      "size": 14472,
+      "sha256": "e85644726987d384cc051a05ab76e23c5fc948ed5088f73be42a33e5a2f21c32"
+    },
+    {
+      "name": "text_in.txt",
+      "size": 149,
+      "sha256": "53062a0198b961fdac6356b34f0dbb1e96b8d81349ce3443d85c41bedec49a73"
+    },
+    {
+      "name": "text_out.txt",
+      "size": 200,
+      "sha256": "4d39e1794f9580ae748083de5c631dfb6a8fb47e014335d91bedd28bb92337a4"
+    },
+    {
+      "name": "flag_out.txt",
+      "size": 40,
+      "sha256": "4d41458b8533f9ec7c9ed42633e96fb8b6acfd46eb3bc5f89869f4ff31e8aad5"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "hash-browns",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "hash-browns-35e93d34",
+  "attachments": [
+    {
+      "name": "hash-browns",
+      "size": 18648,
+      "sha256": "3e8292d4ff11c04a49535c2d3e619699f63afc58bafd472a251e14d5cf6dfb11"
+    }
+  ]
+}

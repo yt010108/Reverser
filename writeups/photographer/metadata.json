@@ -1,0 +1,21 @@
+{
+  "title": "photographer",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "photographer-d3569b4f",
+  "attachments": [
+    {
+      "name": "prob",
+      "size": 26848,
+      "sha256": "e57cc8e80b972b1632121e3e4662a91f7628c63c78580232ff3d2f3e4b8c805f"
+    },
+    {
+      "name": "flag.bmp.enc",
+      "size": 6220854,
+      "sha256": "83266dde8aea8e67db2e97af066a843f263604b2cde6be0c16317d53d78a02f3"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "dungeon-in-1983",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "dungeon-in-1983-de95d295",
+  "attachments": [
+    {
+      "name": "prob",
+      "size": 14472,
+      "sha256": "0e38188d9b151be41b86c7ab9304da59471eb9e7e0ba58d30cc7a3406d913011"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "Long Sleep",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "long-sleep-6ec393f3",
+  "attachments": [
+    {
+      "name": "prob",
+      "size": 14464,
+      "sha256": "7e2484650c1055b3d3bfba21c27ca064ead63bb415254b5418ff1e84c5edfa61"
+    }
+  ]
+}

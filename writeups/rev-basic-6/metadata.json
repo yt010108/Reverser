@@ -1,0 +1,16 @@
+{
+  "title": "rev-basic-6",
+  "event": "Dreamhack Reversing C1",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "rev-basic-6-dacffaf6",
+  "attachments": [
+    {
+      "name": "chall6.exe",
+      "size": 11264,
+      "sha256": "77e584ad4d704dab36cef30ccc1dddcf963ec62d86ef7857744af04f5d34e3af"
+    }
+  ]
+}

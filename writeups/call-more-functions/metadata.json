@@ -1,0 +1,16 @@
+{
+  "title": "Call more functions",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "call-more-functions-1dd24f8e",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 18568,
+      "sha256": "27bad6186efef3cb6d21f19168d64dda3d222535de0b931d3652a3f4f4a22ed8"
+    }
+  ]
+}

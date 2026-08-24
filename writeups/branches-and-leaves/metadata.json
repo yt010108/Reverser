@@ -1,0 +1,16 @@
+{
+  "title": "Branches and Leaves",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "branches-and-leaves-a02272da",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 2111704,
+      "sha256": "c753c291dea7d90cf0fb491061fd9ea1956c16680e8d33108af1f8898713ee5f"
+    }
+  ]
+}

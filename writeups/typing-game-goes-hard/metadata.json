@@ -1,0 +1,26 @@
+{
+  "title": "Typing Game Goes Hard",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "typing-game-goes-hard-dd0e2a4b",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 14480,
+      "sha256": "4acfc4cac0430074111b85a779194c43ef52ccae7b436287f47f8f5bc30124c5"
+    },
+    {
+      "name": "dictionary.txt",
+      "size": 692616,
+      "sha256": "5862075d7cf046d980a18da9d393944568d219bc40a6174c2401bb3fa3e817b4"
+    },
+    {
+      "name": "flag",
+      "size": 13,
+      "sha256": "7aaa493c3e0df2f0637cc81ea45c4c7882d9a7cf086e7f395f14d961497c20bb"
+    }
+  ]
+}

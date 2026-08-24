@@ -1,0 +1,21 @@
+{
+  "title": "Crossing",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "crossing-babbeab5",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 14464,
+      "sha256": "bad7df1c458693b1781707d9c17f0b2629a153e77d3999686c20a6cb6192034a"
+    },
+    {
+      "name": "flag.jpg.crossing",
+      "size": 1846881,
+      "sha256": "0109f2a9984e0775649b011c10e67afe9f72a1d19fee8ff3740303727107b518"
+    }
+  ]
+}

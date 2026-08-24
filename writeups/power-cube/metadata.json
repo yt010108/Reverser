@@ -1,0 +1,16 @@
+{
+  "title": "power cube",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "power-cube-de33c4ce",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 14504,
+      "sha256": "03094313ac0fc5915557457d49b6df970ff8ef6657f3d0346140dcf8db260be4"
+    }
+  ]
+}

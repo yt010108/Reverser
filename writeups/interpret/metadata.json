@@ -1,0 +1,21 @@
+{
+  "title": "Interpret",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "interpret-4712dbfa",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 14472,
+      "sha256": "9632585683277d6770a202b34131a86aed8386c0e7caf621bbb7d1db614e5be1"
+    },
+    {
+      "name": "flag",
+      "size": 13,
+      "sha256": "7aaa493c3e0df2f0637cc81ea45c4c7882d9a7cf086e7f395f14d961497c20bb"
+    }
+  ]
+}

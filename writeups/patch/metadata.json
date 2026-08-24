@@ -1,0 +1,16 @@
+{
+  "title": "patch",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "patch-08db38ac",
+  "attachments": [
+    {
+      "name": "Patch.exe",
+      "size": 117760,
+      "sha256": "45509899f46f4795623d0fa2950de169088961b0b8e70e302c7801531147bbeb"
+    }
+  ]
+}

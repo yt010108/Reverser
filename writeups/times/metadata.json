@@ -1,0 +1,16 @@
+{
+  "title": "Times",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "times-1cbf0adc",
+  "attachments": [
+    {
+      "name": "times",
+      "size": 14528,
+      "sha256": "2ff3dccdcd177dbeb78efbdbe9913eae67234f3217f7be123bfc6f81c821d9c1"
+    }
+  ]
+}

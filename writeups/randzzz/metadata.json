@@ -1,0 +1,16 @@
+{
+  "title": "randzzz",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "randzzz-630f1f56",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 16216,
+      "sha256": "66bd332435dd0bdcb657335ba566c660f92a36836c0802dabe064caf6734018b"
+    }
+  ]
+}

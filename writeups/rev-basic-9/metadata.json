@@ -1,0 +1,16 @@
+{
+  "title": "rev-basic-9",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "rev-basic-9-8c2c3702",
+  "attachments": [
+    {
+      "name": "chall9.exe",
+      "size": 11776,
+      "sha256": "8c548aaaefc26e72ae7b964c7c837bf2d56152ae0dd0745fc42c4c6fe9529982"
+    }
+  ]
+}

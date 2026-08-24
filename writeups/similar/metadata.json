@@ -1,0 +1,21 @@
+{
+  "title": "similar",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "similar-22e15f45",
+  "attachments": [
+    {
+      "name": "similar",
+      "size": 14472,
+      "sha256": "4f0db3857a6bd0b2579b7ac8a35055861b81140f3bb2c27f7fa2c25106c1949d"
+    },
+    {
+      "name": "flag",
+      "size": 13,
+      "sha256": "7aaa493c3e0df2f0637cc81ea45c4c7882d9a7cf086e7f395f14d961497c20bb"
+    }
+  ]
+}

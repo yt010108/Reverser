@@ -1,0 +1,16 @@
+{
+  "title": "public",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "public-52b9f110",
+  "attachments": [
+    {
+      "name": "public",
+      "size": 14464,
+      "sha256": "00c6f69ef319d8242053c70482d271a7b220512c9278ee7cf14bc6f555b15c50"
+    }
+  ]
+}

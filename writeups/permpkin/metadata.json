@@ -1,0 +1,26 @@
+{
+  "title": "Permpkin",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "permpkin-1e1c1367",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 14472,
+      "sha256": "af9185b4ba1c6015aaa53c90660dd34f7f9cc8e67b8de78548dec1c980972576"
+    },
+    {
+      "name": "flag1.txt",
+      "size": 74,
+      "sha256": "55ef64fcd74e897e5ccff04a6010a3ed270258586c59074efdf02e2d1dd43bc2"
+    },
+    {
+      "name": "flag2.txt",
+      "size": 68,
+      "sha256": "6473e8827a544f822ac2a46541d7bdd9a3d3dc07b2d2aeb3b2de0a4ea6f60560"
+    }
+  ]
+}

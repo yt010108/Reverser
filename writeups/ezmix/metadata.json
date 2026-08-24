@@ -1,0 +1,26 @@
+{
+  "title": "ezmix",
+  "event": "Dreamhack Reversing C2",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "ezmix-b4e61fc6",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 14472,
+      "sha256": "bd3cf395cd85b10613e52e74586e20a79e71e8546543608b089d7d5155e64cab"
+    },
+    {
+      "name": "output.bin",
+      "size": 36,
+      "sha256": "4dad63f054e546e218e45b6069708f551e81a41601951c681f0ac0c31e5d1e43"
+    },
+    {
+      "name": "program.bin",
+      "size": 514,
+      "sha256": "b0d3a47a9f5d8908c32b56061b0b61270cd38ad39b9d867f75b25a6b3a628c40"
+    }
+  ]
+}

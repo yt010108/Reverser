@@ -1,0 +1,16 @@
+{
+  "title": "Honest",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "honest-44a824a8",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 26824,
+      "sha256": "7715bf7a3f0dd5212680f7e3b5c30575af01c394176ec2449355998e25827b41"
+    }
+  ]
+}

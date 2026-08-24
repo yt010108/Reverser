@@ -1,0 +1,21 @@
+{
+  "title": "bitvm",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "bitvm-db8b9251",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 14472,
+      "sha256": "93ca9f79b325638ba9e753be25a889c6699d36da868dd32cfa42fa8f5c86a9e0"
+    },
+    {
+      "name": "command",
+      "size": 2472,
+      "sha256": "b5bd0a0b849a6df8acac7b82257b5c33e72ded98fe57798a767259011bd026a8"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "instrs",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "instrs-38315461",
+  "attachments": [
+    {
+      "name": "prob",
+      "size": 14472,
+      "sha256": "9397788718d65d03153940786b81ce5e345c54e132d8dfaa660db647cf992c67"
+    }
+  ]
+}

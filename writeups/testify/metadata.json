@@ -1,0 +1,21 @@
+{
+  "title": "Testify",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "testify-4c01a64b",
+  "attachments": [
+    {
+      "name": "chal",
+      "size": 16640,
+      "sha256": "3a9f5ce3bf4447e005c610a03be0a1446b0f92ecffd91b1991d571903ebbb9e3"
+    },
+    {
+      "name": "chal.c",
+      "size": 4542,
+      "sha256": "25dcf610dd02ce59774428bca8d68d11284ef4aa3560c91ec2f53a59b2da1d1c"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "rev-basic-7",
+  "event": "Dreamhack Reversing C1",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "rev-basic-7-dfb3e0d8",
+  "attachments": [
+    {
+      "name": "chall7.exe",
+      "size": 11264,
+      "sha256": "3e72f1fe5dc47045cb4cab402eaa055c564a760fd8b89e08d5d64999f6cdc4d6"
+    }
+  ]
+}

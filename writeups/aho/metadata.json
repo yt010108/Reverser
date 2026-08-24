@@ -1,0 +1,21 @@
+{
+  "title": "Aho",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "aho-825c537a",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 16176,
+      "sha256": "6f903a378517f2b7695ebed9d2eab1ef19d90c7129ae8537c4f1d000b026205f"
+    },
+    {
+      "name": "flag",
+      "size": 13,
+      "sha256": "d65522611a74e6a709c6cb61e58c858434d8a570277517b1645fcf8af41a606a"
+    }
+  ]
+}
