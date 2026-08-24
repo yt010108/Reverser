@@ -1,0 +1,16 @@
+{
+  "title": "CrabME",
+  "event": "Dreamhack Reversing C3",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "crabme-d9167c37",
+  "attachments": [
+    {
+      "name": "chal",
+      "size": 452016,
+      "sha256": "b3ee5bf3820a262bad589646936563fdcb9eba336709d9456ca5130999c70432"
+    }
+  ]
+}

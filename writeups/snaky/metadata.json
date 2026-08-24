@@ -1,0 +1,16 @@
+{
+  "title": "Snaky",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "snaky-ed7d945a",
+  "attachments": [
+    {
+      "name": "chall",
+      "size": 30184,
+      "sha256": "240a9de4cdcaf7fa5ada93018b9ef2d0b6ba94e8a98d0c1d529fa8f04dce84d0"
+    }
+  ]
+}

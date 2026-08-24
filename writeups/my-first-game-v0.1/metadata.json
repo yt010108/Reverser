@@ -1,0 +1,21 @@
+{
+  "title": "My_First_Game_v0.1",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "my-first-game-v0.1-41432274",
+  "attachments": [
+    {
+      "name": "WindowsProject1.exe",
+      "size": 221696,
+      "sha256": "45eb8244d5cc93e47d372fde716d06bd58c6071a2a1a4388652d8c4f6e9d863d"
+    },
+    {
+      "name": "background.png",
+      "size": 5665,
+      "sha256": "f3a9f002f0912112a294c07ae3cd40969b184ccfb1d57c03791551350265a7ed"
+    }
+  ]
+}

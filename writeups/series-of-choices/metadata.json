@@ -1,0 +1,16 @@
+{
+  "title": "Series of Choices",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "series-of-choices-1c8fcd68",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 256224,
+      "sha256": "906d148c5ad152b16192a65d1b9ea61d60c5981c21bb06d23fcd9511d9b4e7af"
+    }
+  ]
+}

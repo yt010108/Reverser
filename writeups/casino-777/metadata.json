@@ -1,0 +1,16 @@
+{
+  "title": "Casino-777",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "casino-777-da203cdd",
+  "attachments": [
+    {
+      "name": "casino_777",
+      "size": 14624,
+      "sha256": "b4b588a7ed2604ff285b9c45002c6c4d712c6aed8c9760f159823691861296bb"
+    }
+  ]
+}

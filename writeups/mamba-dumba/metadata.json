@@ -1,0 +1,21 @@
+{
+  "title": "Mamba Dumba",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": null,
+  "bits": null,
+  "source_url": "",
+  "challenge_id": "mamba-dumba-7c65c0ea",
+  "attachments": [
+    {
+      "name": "chall.py",
+      "size": 2611,
+      "sha256": "aee59750fafcbafac882e0576562f162411e677bc3dabca76f35e9df3d07c0c1"
+    },
+    {
+      "name": "run.sh",
+      "size": 27,
+      "sha256": "2c6c6995fc39ebff1aa448cbcc2be946c8cd6645eed6ae62cd2cbc5de8d1961b"
+    }
+  ]
+}

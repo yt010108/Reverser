@@ -1,0 +1,21 @@
+{
+  "title": "L3ak CTF What Who",
+  "event": "L3akCTF 2026 rev",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "l3ak-ctf-what-who-1c0b2b7d",
+  "attachments": [
+    {
+      "name": "whatwho",
+      "size": 22584,
+      "sha256": "824df250815f9b6eaf7ebbe29327bb19745dda54dc390aca8a97c2d1b903bb29"
+    },
+    {
+      "name": "vault.wwc",
+      "size": 3970,
+      "sha256": "c825790650f61acdf107f0a83450b2133b9e461e4c175651f6fa89fab76b364e"
+    }
+  ]
+}

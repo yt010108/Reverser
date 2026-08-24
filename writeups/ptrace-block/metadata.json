@@ -1,0 +1,21 @@
+{
+  "title": "ptrace_block",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "ptrace-block-13b242ae",
+  "attachments": [
+    {
+      "name": "prob",
+      "size": 14488,
+      "sha256": "fc89a76044a2bc624c59ffb9214b90f4125b4f4623260f82ada937156593a40d"
+    },
+    {
+      "name": "out.txt",
+      "size": 256,
+      "sha256": "be07b74417bcb6444981842719500e8671166199215e4da54d26ba93199aaed5"
+    }
+  ]
+}

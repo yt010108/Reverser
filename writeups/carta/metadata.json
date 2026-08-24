@@ -1,0 +1,26 @@
+{
+  "title": "carta",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "carta-0fb09bff",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 14472,
+      "sha256": "f87fa4a4148c78bc95c77294fe54c5f4ebbdc04ab1b2e47c68362d0c3aa7b5fd"
+    },
+    {
+      "name": "flag",
+      "size": 13,
+      "sha256": "7aaa493c3e0df2f0637cc81ea45c4c7882d9a7cf086e7f395f14d961497c20bb"
+    },
+    {
+      "name": "Dockerfile",
+      "size": 542,
+      "sha256": "f9bbacc7a5fdd40d63f4e23d5858e7889b80afbc9697efb0e4bdbaad7935c21f"
+    }
+  ]
+}

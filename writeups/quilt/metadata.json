@@ -1,0 +1,21 @@
+{
+  "title": "quilt",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "quilt-ea5a9915",
+  "attachments": [
+    {
+      "name": "quilt",
+      "size": 14560,
+      "sha256": "f0dcf955db0e635643143cb86d59012d8199b3680dc7f0d8175e23705574125d"
+    },
+    {
+      "name": "quilt.bmp",
+      "size": 786486,
+      "sha256": "638b6af9d9c4063f95973e5a33301d9aa42ae547f38aab17ee5838e54f45d3fe"
+    }
+  ]
+}

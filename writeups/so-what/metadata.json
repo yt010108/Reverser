@@ -1,0 +1,16 @@
+{
+  "title": "so what",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": null,
+  "bits": null,
+  "source_url": "",
+  "challenge_id": "so-what-2804e745",
+  "attachments": [
+    {
+      "name": "so-what-bundle.tgz",
+      "size": 672469,
+      "sha256": "0518b34d161bf1b835377cdd72f165e4cd620dab80a16e99b884d922ff708a98"
+    }
+  ]
+}

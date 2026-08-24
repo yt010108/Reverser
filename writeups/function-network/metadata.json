@@ -1,0 +1,16 @@
+{
+  "title": "Function Network",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "function-network-fe0647e9",
+  "attachments": [
+    {
+      "name": "chal",
+      "size": 283224,
+      "sha256": "10088b59758ca0e533917b606f9d21cc7ddf1221271dc75ff26373273039ebdd"
+    }
+  ]
+}

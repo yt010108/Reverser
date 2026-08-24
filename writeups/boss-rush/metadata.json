@@ -1,0 +1,16 @@
+{
+  "title": "boss-rush",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "boss-rush-fec6187c",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 35120,
+      "sha256": "199b1467859190eca84ef31a529048e25ed4eee6f0402c52418a9a4611d27fb0"
+    }
+  ]
+}

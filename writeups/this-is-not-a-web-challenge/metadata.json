@@ -1,0 +1,26 @@
+{
+  "title": "This is not a web challenge",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "this-is-not-a-web-challenge-e246c596",
+  "attachments": [
+    {
+      "name": "module.so",
+      "size": 14448,
+      "sha256": "9a4e43b9ccb1184e49a89eed604c1377491129c8151a35cc2945490957badbce"
+    },
+    {
+      "name": "index.html",
+      "size": 279,
+      "sha256": "9bab8d5c4d3002cc27440c2fa937343c17bb35cda5f645d98cc2ade552a3f81c"
+    },
+    {
+      "name": "custom.conf",
+      "size": 72,
+      "sha256": "2b961c5392e384e3b30dae819f6dd2ef9d48f1c8dc4169e68915696914b4976c"
+    }
+  ]
+}

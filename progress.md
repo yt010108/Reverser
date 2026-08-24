@@ -47,3 +47,35 @@
 - reversing-3 미해결: Secure Mail, Testify, Branches and Leaves, photographer, Call more functions, similar, CrabME, Interpret, instrs, Aho, Typing Game Goes Hard, Honest
 - reversing-4 미해결: hash-browns, Crossing, Times, bitvm, Slooooow, ptrace_block, Dance in the Light, quilt, Snaky, Vernichtet, carta, Casino-777 (Reversing C1 미해결)
 rev-basic-5, rev-basic-6, rev-basic-7, rev-basic-8, Recover, r-xor-t, legacyopt
+
+## 2026-08-24 — reversing-2/3/4 클래스 전체 공략 완료
+- 32개 문제 다운로드(runs/_staging/*.zip) → 임포트 → ctf_solve 위임 → 리뷰어 검수 완료.
+- 플래그는 모두 로컬(ctf_record_flag)만 기록, 사이트 미제출.
+
+### Reversing C2 — 8/8 solved
+ezmix(VM 역산), patch(GDI+ 선분→ASCII 렌더, KH{UPATCHEK}), Long Sleep(변조 SHA-256 재구현),
+randzzz(glibc rand 시퀀스 디코딩), Permpkin(swap+XOR 치환 역산),
+My ARX Cipher(3라운드 ARX 복호화+재암호화 검증), power cube(x^(3^n) mod 2^64 + SHA256),
+baseball(known-plaintext로 커스텀 base64 테이블 복구)
+
+### Reversing C3 — 11 solved / 1 unsolved
+Secure Mail(난독화 JS 해제→AES-CBC MD5(YYMMDD) 브루트포스 pw=960229→PNG 플래그),
+Branches and Leaves(이진 트리 DFS 경로 복원), photographer(glibc srand(0xbeef) BMP 복호화),
+Call more functions(스택 VM XOR 제약 GF(2) 소거), similar(cosine 거리 정렬, 로컬 테스트 플래그),
+CrabME(Rust 비트치환+XOR/ADD 역산), Interpret(VM 바이트코드 역산), instrs(VM 프로그래밍 r-al-aen),
+Aho(Aho-Corasick DP 유일해), Typing Game(커스텀 MT PRNG 예측), Honest(체인 verify 함수 역산)
+- Testify ⚠️ unsolved: 서버 전용 동적 플래그. 솔버 완성·트윈 바이너리로 검증됨.
+  runs/testify-4c01a64b/work/extract.py --host HOST --port PORT 로 실행 필요.
+
+### Reversing C4 — 12/12 방법 확정(대부분 실제 플래그 로컬 획득)
+hash-browns(3바이트 블록 MD5 preimage), Crossing(격자 인코딩 역파싱→flag.jpg),
+Times(ptrace 안티디버그+시간 제한, dword 비트반전), bitvm(VM 제약 브루트포스),
+Slooooow(Stooge Sort 등가 정렬→SHA256), ptrace_block(AES 키 공간 축소 브루트포스+LD_PRELOAD 후크 보정),
+Dance in the Light(MP3 패딩비트 스테가노그래피, 역방향 DP), quilt(BMP 팔레트 base64 역매핑),
+Snaky(25³ 미로 DFS, 로컬 good :)), Vernichtet(Hidato 백트래킹→SHA256),
+carta(LFSR 셔플 예측, 로컬 테스트 플래그), Casino-777(CRT 회전 조합, 로컬 잭팟 검증)
+
+### 서버 접속 필요(동적 플래그) 목록
+dungeon-in-1983, secret-message(기존 runs 항목), testify, similar/interpret/instrs/aho/
+typing-game-goes-hard/carta/casino-777(로컬은 DH{testflag} 더미 — 원격 인스턴스에서
+저장된 솔버를 돌려야 실제 플래그 획득). 각 challenge의 runs/<id>/work|reports 참조.

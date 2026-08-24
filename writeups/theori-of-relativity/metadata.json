@@ -1,0 +1,16 @@
+{
+  "title": "Theori of Relativity",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "theori-of-relativity-b57c42b4",
+  "attachments": [
+    {
+      "name": "relativity",
+      "size": 22784,
+      "sha256": "6d5497b7f54483c236556615af2638bba923b7ee181a5d6468cd9ca530a41c25"
+    }
+  ]
+}

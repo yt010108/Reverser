@@ -1,0 +1,21 @@
+{
+  "title": "Dance in the Light",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "dance-in-the-light-de60a666",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 14640,
+      "sha256": "0f8bb6e0e6134544f7bf385c86fba133653bac540ad60f48f829d8e9ead5366b"
+    },
+    {
+      "name": "output.mp3",
+      "size": 653793,
+      "sha256": "39bfe3c963d7fc253116ff9ecd9a99826fef169b0e3478e259bb79072f5981ac"
+    }
+  ]
+}

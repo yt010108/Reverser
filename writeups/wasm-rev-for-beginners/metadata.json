@@ -1,0 +1,26 @@
+{
+  "title": "Wasm rev for beginners",
+  "event": "Dreamhack Reversing C5",
+  "category": "reverse",
+  "architecture": null,
+  "bits": null,
+  "source_url": "",
+  "challenge_id": "wasm-rev-for-beginners-48766e18",
+  "attachments": [
+    {
+      "name": "challenge_bg.wasm",
+      "size": 13978,
+      "sha256": "b491796014a88dae7ae76888fea34145ffd3fd66febc16bd6eead98e51b9965d"
+    },
+    {
+      "name": "challenge.js",
+      "size": 4963,
+      "sha256": "cba116b61d47aa42e0a2f3e74d7c8c7af11eeb2051d86b78a136f9426bc5cf86"
+    },
+    {
+      "name": "index.html",
+      "size": 875,
+      "sha256": "3d084838c3bf49e72df555505db8549857fb366ad40c9cea02a7b9e9cd86704c"
+    }
+  ]
+}

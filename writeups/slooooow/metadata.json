@@ -1,0 +1,16 @@
+{
+  "title": "Slooooow",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "slooooow-1dfd2cd0",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 414488,
+      "sha256": "2090e14956b32dc8cba015de4e16a52d52a02216c0e3312f25b8db6509a57aeb"
+    }
+  ]
+}

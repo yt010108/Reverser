@@ -1,0 +1,16 @@
+{
+  "title": "Vernichtet",
+  "event": "Dreamhack Reversing C4",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "vernichtet-237a678a",
+  "attachments": [
+    {
+      "name": "main",
+      "size": 15160,
+      "sha256": "0d05624cfd68be744eb6aa09d54ff1432491435af5cd7659fcb67ef97f9d47a3"
+    }
+  ]
+}
