@@ -1,0 +1,21 @@
+{
+  "title": "L3ak CTF Drippy Adventures",
+  "event": "L3akCTF 2026 rev",
+  "category": "reverse",
+  "architecture": "x86",
+  "bits": 32,
+  "source_url": "",
+  "challenge_id": "l3ak-ctf-drippy-adventures-f4f19ab3",
+  "attachments": [
+    {
+      "name": "Assembly-CSharp.dll",
+      "size": 95232,
+      "sha256": "76ee86289a822b717167e708cd7656dc28983a971305ae7090c77c1971c79b34"
+    },
+    {
+      "name": "drippy.readme",
+      "size": 105,
+      "sha256": "8d125b4e975fd0d3c01a9bf65594e3beff60c1a1a9ce02ec69f927f7e2f2ce5d"
+    }
+  ]
+}

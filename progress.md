@@ -1,5 +1,11 @@
 # Progress
 
+## 폴더 구조 (2026-08-24 재정리)
+- `runs/dreamhack-reversing-c1..c5/` — 드림핵 리버싱 클래스별
+- `runs/l3akctf-2026/` — L3akCTF 2026 rev 6문제
+- `writeups/`도 동일 구조 (공개용은 플래그 redacted)
+- 예전 문서 내 `runs/<id>/...` 경로는 `runs/<분류>/<id>/...`로 읽을 것
+
 ## 2026-08-24 — rev-basic-3 (Dreamhack Reversing C1) ✅ SOLVED
 - 상태: solved (플래그 로컬 기록 완료, 사이트 미제출)
 - challenge_id: rev-basic-3-39f94b43
@@ -77,5 +83,42 @@ carta(LFSR 셔플 예측, 로컬 테스트 플래그), Casino-777(CRT 회전 조
 
 ### 서버 접속 필요(동적 플래그) 목록
 dungeon-in-1983, secret-message(기존 runs 항목), testify, similar/interpret/instrs/aho/
-typing-game-goes-hard/carta/casino-777(로컬은 DH{testflag} 더미 — 원격 인스턴스에서
-저장된 솔버를 돌려야 실제 플래그 획득). 각 challenge의 runs/<id>/work|reports 참조.
+typing-game-goes-hard/carta/casino-777, boss-rush(C5). 로컬은 더미 플래그 — 원격
+인스턴스에서 저장된 솔버를 돌려야 실제 플래그 획득. runs/<id>/work|reports 참조.
+
+## 2026-08-24 — Reversing C5 공략 완료
+- 12문제 임포트 → ctf_solve 위임 → 리뷰어 검수. 플래그는 모두 로컬(ctf_record_flag)만 기록.
+
+### C5 최종: 9 solved(로컬 플래그) + 1 서버전용 + 2 미해결
+✅ solved:
+- wasm-rev-for-beginners: WASM 데이터 섹션 직접 파싱, (T-37)*13⁻¹^K
+- mamba-dumba: marshal 수동 파서, 3클래스 가감/XOR 시프트 역산
+- My_First_Game_v0.1: D3DX 메시 정점/인덱스 → 글리프 래스터라이즈 → 68자 복원
+- this-is-not-a-web-challenge: Apache module.so — A^B^C 경로+플래그, CRC 검증
+- Function Network: 함수 디스패처(2bit 트리) 역산 + 10000개 ARX 연산 역적용
+- Series of Choices: gdb 그래프 덤프 후 DAG 경로 수 mod 2⁶⁴
+- Theori of Relativity: .rela.tivity 섹션 재배치 시뮬레이션 → 키 생성 역산
+- with my love: Nim — GF(2) 커널 리프팅으로 mod 256 선형시스템(DH{ecf87d8d…})
+- so-what: dlopen 체인 그래프 역산. 핵심은 main의 test eax 분기 극성이 반대
+  (eax≠0→"Flag is DH{입력}"). LD_DEBUG=libs로 체인 검증.
+  리뷰: runs/so-what-2804e745/reports/review.md
+
+⚠️ boss-rush: 방법 확정·로컬 클리어 검증. 서버 동적 플래그(platform_url 없음).
+  패스워드: 행순서{0,4,3,1,2} 20비트 마스크 ror20 + 8 XOR 제약쌍 전수 탐색(16개 해).
+  입력 트랜스크립트는 runs/boss-rush-fec6187c/reports/writeup.private.md 참조.
+
+❌ weird-forest(researching): 이모지 이진트리 인코딩 복호화. 시뮬레이터 모델은 참 k에서
+  바이너리 출력과 100% 일치 확정. 단 XOR 키 k가 실행 환경마다 다름(워커별 상이) 확인 →
+  1308토큰=195문자, P(자유도)68 / C(결정적)127. 빔서치 구현들은 샘플 exact 복원 관문
+  미통과로 무효. 핵심 기법 ctf_learn 저장 완료. 차기: 같은 워커에서 샘플 검증 후 적용,
+  C 127개 결정적 위치 활용 + 단어/플래그 경계 프루닝.
+
+❌ captain-hook(unsolved): PE 난독화·LCG 키스트림 완전 복호화(dec.bin=실제 평문,
+  X=17304까지 에뮬 검증). 남음: 최종 모노알파베틱 치환층 — cp949/UTF16/Base64/
+  어닐링/사전 DFS 전부 기각. 신규 발견: 7976–8600의 16B 스트라이드 (값,태그) 테이블.
+  차기 경로: runs/dreamhack-reversing-c5/captain-hook-44dd5425/work/learn-note.md v2.
+
+### 교훈(C5)
+- dlopen 체인 추적엔 lib 숨기기 이분탐색보다 LD_DEBUG=libs가 압도적으로 빠름.
+- 성공/실패 분기 조건은 rodata 주소로 직접 확인(so-what 극성 반대 사례).
+- 미검증 솔버는 같은 워커에서 샘플 exact 복원부터(weird-forest 낭비 사례).

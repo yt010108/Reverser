@@ -1,0 +1,16 @@
+{
+  "title": "L3ak CTF Subleq Scramble",
+  "event": "L3akCTF 2026 rev",
+  "category": "reverse",
+  "architecture": null,
+  "bits": null,
+  "source_url": "",
+  "challenge_id": "l3ak-ctf-subleq-scramble-4abc0f66",
+  "attachments": [
+    {
+      "name": "data.subleq",
+      "size": 6912,
+      "sha256": "12e0ee7cfe9d5e3d675fb2e98cf8acb170a8f42735a7179d6c47cf8e4009bed4"
+    }
+  ]
+}
