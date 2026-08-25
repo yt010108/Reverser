@@ -5,7 +5,7 @@
 
 ## 1. 결론부터
 
-현재 하네스의 방향은 좋다. 특히 **호스트와 문제 바이너리의 분리**, **명령마다 폐기되는 네트워크 차단 Docker worker**, **실제 플래그의 Git 차단**, **30분 전 공개 풀이 검색 금지**, **풀이와 Reviewer 컨텍스트 분리**는 조사한 프로젝트 상당수보다 명확하다.
+현재 하네스의 방향은 좋다. 특히 **호스트와 문제 바이너리의 분리**, **명령마다 폐기되는 네트워크 차단 Docker worker**, **실제 플래그의 Git 차단**, **활성 문제의 공개 풀이 검색 금지**, **풀이와 Reviewer 컨텍스트 분리**는 조사한 프로젝트 상당수보다 명확하다.
 
 지금 가장 부족한 것은 에이전트 수나 도구 수가 아니다. 핵심 결손은 다음 네 가지다.
 
@@ -14,7 +14,7 @@
 3. 플래그 문자열을 기록하면 즉시 `solved`가 되어, **실제 실행 결과에 근거했다는 증거 연결**이 없다.
 4. Pi Solver 프로세스에는 명령별 timeout 외에 **턴·비용·전체 실행 예산과 명확한 종료 사유**가 없다.
 
-따라서 다음 버전은 Muteki처럼 거대한 swarm을 만드는 대신, 현재 `progress.md` 하나에 `hypotheses`, `dead_ends`, `flag_evidence`, `exit_reason`만 추가하고, 일정 횟수 동안 새 증거가 없으면 기존 Solver를 끝내고 **요약된 상태를 받은 새 Solver/Reviewer로 한 번 전환**하는 것이 가장 효율적이다.
+따라서 다음 버전은 Muteki처럼 거대한 swarm을 만드는 대신, 현재 `progress.md` 하나에 `hypotheses`, `dead_ends`, `exit_reason`만 추가하고, 일정 횟수 동안 새 증거가 없으면 기존 Solver를 끝내고 **요약된 상태를 받은 새 Solver/Reviewer로 한 번 전환**하는 것이 가장 효율적이다.
 
 ## 2. 현재 하네스 기준선
 
@@ -25,8 +25,8 @@
 3. Solver는 `core → dynamic → 선택 함수만 ghidra → angr` 순서를 우선한다.
 4. 실제 바이너리 분석 명령은 명령마다 새 Docker 컨테이너에서 실행된다.
 5. 각 명령의 stdout/stderr와 명령 이력은 run 폴더와 `progress.md`에 남는다.
-6. 30분 전에는 공개 풀이와 로컬 기법 메모리를 검색하지 않는다.
-7. 해결, 미해결 또는 30분 초과 상태에서 새 컨텍스트의 Reviewer가 실행된다.
+6. 공개 풀이는 검색하지 않고, 로컬 기법 메모리는 30분 뒤에만 검색한다.
+7. 미해결 또는 30분 초과 상태에서만 새 컨텍스트의 Reviewer가 실행된다.
 8. Reviewer는 검증, 더 빠른 풀이, 도구 제안을 `reports/review.md`에 남긴다.
 9. 실제 플래그와 비공개 write-up은 Git에서 제외하고 공개 write-up은 플래그를 제거한다.
 
@@ -182,7 +182,7 @@ Muteki는 Claude, Codex, Cursor, Pi, OpenCode 등 여러 CLI agent를 같은 문
 
 - 상대가 강함: 공유 dead-end, 실행 증거 gate, 여러 모델의 상호 보완, lease와 intent 중복 방지, 실시간 review.
 - 우리가 강함: 훨씬 적은 프로세스·토큰·운영 복잡도, 한 문제 한 Solver의 추적 용이성, 기본 networkless worker, host 실행 차단, 작은 Docker 프로필. Muteki의 로컬 worker는 강한 격리를 보장하지 않고 worker가 도구 설치도 할 수 있다.
-- 가져올 것: blackboard 전체가 아니라 `progress.md`에 검증된 facts/dead-ends와 flag evidence를 넣는 것.
+- 가져올 것: blackboard 전체가 아니라 `progress.md`의 facts/dead-ends와 기존 실행 로그를 연결하는 것.
 - 가져오지 않을 것: 2초 OODA, SSE/JSONL event bus, 최대 10 worker, intent lease, heterogeneous model race. 지금 사용자 요구인 “최대한 미니멀”과 충돌한다.
 
 ## 5. 한눈에 보는 구조 비교
@@ -213,9 +213,9 @@ Muteki는 Claude, Codex, Cursor, Pi, OpenCode 등 여러 CLI agent를 같은 문
 
 실제 플래그와 비공개 write-up은 run 안에 두고, 공개 write-up에는 flag-like 값을 제거한다. `ctf-skills`나 연구용 benchmark agent보다 개인 Git workflow에 더 직접 맞는다.
 
-### 6.4 공개 풀이 검색의 시간 gate
+### 6.4 로컬 기법 검색의 시간 gate
 
-기법 검색을 처음부터 허용하지 않고 30분 뒤 또는 미해결일 때만 연다. solve rate만 최적화하는 하네스와 달리 학습 목적과 데이터 누출 방지를 동시에 고려한다.
+로컬 기법 검색을 처음부터 허용하지 않고 30분 뒤 또는 미해결일 때만 연다. 활성 문제의 공개 풀이는 검색하지 않는다.
 
 ### 6.5 선택적인 학습 메모리
 
@@ -239,16 +239,15 @@ Muteki는 Claude, Codex, Cursor, Pi, OpenCode 등 여러 CLI agent를 같은 문
 
 - `solved`: 성공
 - `unsolved`: 정상 종료지만 미해결
-- `failed`: 인프라/agent 실패
-- 그 외 상태로 child가 종료: `incomplete`
+- `failed`: 인프라·agent 실패 또는 terminal state 없이 종료
 
-Reviewer가 성공해도 Solver 프로세스 오류를 숨기지 않는다.
+`exit_reason`으로 agent 프로세스 오류와 terminal state 없는 종료를 구분한다. Reviewer가 성공해도 Solver 프로세스 오류를 숨기지 않는다.
 
 #### P0-3. 플래그 provenance gate
 
-`ctf_record_flag(challenge_id, value, evidence_run)` 형태로 바꾸고 해당 `evidence_run`의 stdout/stderr 원문에 같은 문자열이 있을 때만 `solved`로 전환한다. 출력에 없는 값은 `flag_candidates`에 후보로만 보관한다.
+`ctf_record_flag(challenge_id, value, evidence_run)` 형태로 바꾸고 성공한 `evidence_run`의 stdout/stderr 원문에 같은 문자열이 있을 때만 `solved`로 전환한다. 조건을 통과하지 못한 후보는 저장하지 않는다.
 
-정적 분석에서 스크립트가 플래그를 직접 출력하지 않고 로직만 증명한 경우를 위해 `evidence_run`과 `verification_note`를 함께 요구하되, note만으로 자동 solved는 허용하지 않는다. 검증 스크립트를 worker에서 실행해 후보가 출력되도록 하는 편이 재현 가능하다.
+이 gate는 정답 자체를 검증하지 않고 값이 실행 결과에서 나왔다는 provenance만 확인한다. 더 일반적인 검증 계층은 추가하지 않는다.
 
 ### P1 — 최소 피드백 루프
 
@@ -286,7 +285,7 @@ Reviewer가 성공해도 Solver 프로세스 오류를 숨기지 않는다.
 
 #### P1-4. Pi run 예산과 종료 사유
 
-30분은 공개 풀이 검색 전환 기준으로 유지하되 별도로 다음을 둔다.
+30분은 로컬 기법 검색 전환 기준으로 유지하되 별도로 다음을 둔다.
 
 - `max_agent_turns`
 - `max_tool_runs`
@@ -327,7 +326,7 @@ FTS는 유지하되 technique card에 `format`, `arch`, `signals`, `precondition
 - Pi turns와 tool runs
 - 동일 명령 반복률
 - 첫 유효 fact까지 시간
-- 공개 풀이 검색 전 해결 비율
+- 로컬 기법 검색 전 해결 비율
 - 잘못된 flag candidate 수
 - Docker/tool 오류율
 
@@ -351,13 +350,13 @@ flowchart TD
     B --> C[fact·hypothesis·dead-end 갱신]
     C --> D{출력에 flag 후보가 실제 존재?}
     D -- 예 --> E[provenance gate]
-    E -- 통과 --> F[solved 후 fresh Reviewer]
+    E -- 통과 --> F[solved]
     D -- 아니오 --> G{새 정보가 생겼나?}
     G -- 예 --> A
     G -- 최근 5회 없음 --> H[막힘 요약·반복 경로 차단]
     H --> I{30분 지났나?}
     I -- 아니오 --> J[fresh Solver로 전략 1회 전환]
-    I -- 예 --> K[로컬 기법·공개 풀이 검색 허용]
+    I -- 예 --> K[로컬 기법 검색 허용]
     J --> A
     K --> A
     F --> L[기법·도구 개선 효과 평가]
@@ -386,7 +385,7 @@ flowchart TD
 ### 1차: 신뢰할 수 있는 종료
 
 - 개별 명령 실패가 run 상태를 망치지 않는다.
-- child 종료 후 terminal state가 아니면 `incomplete`로 보인다.
+- child 종료 후 terminal state가 아니면 `failed`와 종료 사유가 남는다.
 - flag evidence가 실제 worker 출력에 없으면 solved가 되지 않는다.
 - 모든 종료에 `exit_reason`이 있다.
 

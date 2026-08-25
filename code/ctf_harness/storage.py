@@ -39,7 +39,8 @@ def atomic_write_json(path: Path, payload: Any) -> None:
 
 def public_state(state: dict[str, Any]) -> dict[str, Any]:
     """화면과 CLI에는 실제 플래그 값을 내보내지 않는다."""
-    result = {key: value for key, value in state.items() if key != "flags"}
+    private_keys = {"flags"}
+    result = {key: value for key, value in state.items() if key not in private_keys}
     result["flag_candidates"] = len(state.get("flags", []))
     result["elapsed_seconds"] = solve_elapsed_seconds(state)
     return result
@@ -109,6 +110,7 @@ class ChallengeStore:
             "solved_at": None,
             "finished_at": None,
             "blocker": "",
+            "exit_reason": None,
             "flags": [],
             "artifacts": [],
             "tool_runs": [],

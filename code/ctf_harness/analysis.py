@@ -64,7 +64,7 @@ class Analyzer:
         if profile not in PROFILES:
             raise AnalysisError(f"Unknown profile: {profile}")
         state = self.store.load(challenge_id)
-        if state.get("status") not in {"solving", "researching", "failed"}:
+        if state.get("status") not in {"solving", "researching"}:
             raise AnalysisError("Run triage before free-form analysis")
         root = self.store.challenge_dir(challenge_id)
         result = self.worker.run(
@@ -73,22 +73,52 @@ class Analyzer:
             command=command,
             timeout_seconds=timeout_seconds,
         )
-        if state.get("status") != "researching":
-            state["status"] = "solving" if result.exit_code == 0 else "failed"
         self._record_run(state, profile, result)
         self.store.save(state)
         return state, result
 
-    def record_flag(self, challenge_id: str, flag: str) -> dict[str, Any]:
+    def record_flag(
+        self, challenge_id: str, flag: str, evidence_run: int
+    ) -> dict[str, Any]:
         state = self.store.load(challenge_id)
         value = flag.strip()
         if not value or len(value) > 1024:
             raise AnalysisError("Invalid flag candidate")
+        run = next(
+            (
+                item
+                for item in state.get("tool_runs", [])
+                if item.get("sequence") == evidence_run
+            ),
+            None,
+        )
+        if (
+            run is None
+            or run.get("exit_code") != 0
+            or run.get("timed_out", False)
+        ):
+            raise AnalysisError("Invalid evidence run")
+        root = self.store.challenge_dir(challenge_id)
+        output = "\n".join(
+            (root / str(run[name])).read_text(encoding="utf-8", errors="replace")
+            for name in ("stdout", "stderr")
+        )
+        if value not in output:
+            raise AnalysisError("Flag not found in evidence run")
         if value not in state["flags"]:
             state["flags"].append(value)
         state["status"] = "solved"
         state["solved_at"] = state.get("solved_at") or utc_now()
         state["finished_at"] = state.get("finished_at") or state["solved_at"]
+        self.store.save(state)
+        return state
+
+    def terminate(self, challenge_id: str, exit_reason: str) -> dict[str, Any]:
+        state = self.store.load(challenge_id)
+        state["exit_reason"] = exit_reason
+        if state.get("status") not in {"solved", "unsolved"}:
+            state["status"] = "failed"
+            state["finished_at"] = state.get("finished_at") or utc_now()
         self.store.save(state)
         return state
 

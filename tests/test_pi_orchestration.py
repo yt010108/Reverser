@@ -23,10 +23,19 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('name: "ctf_review"', extension)
         self.assertIn('"--mode", "json", "-p", "--no-session", "--approve"', extension)
         self.assertIn('"--tools", AGENT_TOOLS[role].join(",")', extension)
-        self.assertIn('state?.status === "solved"', extension)
         self.assertIn('state?.status === "unsolved"', extension)
         self.assertIn("state?.research_due === true", extension)
         self.assertIn('runPiAgent("reviewer"', extension)
+        self.assertIn("const agentFailed = solver.exitCode !== 0", extension)
+        self.assertIn('"agent_exited_without_terminal_state"', extension)
+        solve_block = extension.split('name: "ctf_solve"', 1)[1].split(
+            'name: "ctf_review"', 1
+        )[0]
+        self.assertIn(
+            'const reviewable = state?.status === "unsolved" || state?.research_due === true;',
+            solve_block,
+        )
+        self.assertNotIn('const reviewable = state?.status === "solved"', solve_block)
         self.assertIn("slice(0, 4_000)", extension)
         self.assertIn('event.type === "tool_execution_start"', extension)
         self.assertIn('event.type === "tool_execution_end"', extension)
@@ -45,6 +54,12 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertNotIn('"ctf_browser"', reviewer_block)
         self.assertTrue((ROOT / ".pi" / "agents" / "solver.md").is_file())
         self.assertTrue((ROOT / ".pi" / "agents" / "reviewer.md").is_file())
+
+    def test_flag_tool_requires_evidence_and_solution_search_is_local_only(self):
+        extension = (ROOT / ".pi" / "extensions" / "ctf.ts").read_text(encoding="utf-8")
+        self.assertIn("evidence_run: Type.Integer", extension)
+        self.assertIn('"--evidence-run"', extension)
+        self.assertNotIn("public web results", extension)
 
 
 if __name__ == "__main__":

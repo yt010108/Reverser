@@ -20,7 +20,8 @@ class WriteupManager:
         private_path.write_text(markdown.rstrip() + "\n", encoding="utf-8", newline="\n")
         self.store.register_artifact(state, private_path, "private-writeup")
 
-        export_dir = self.project_root / "writeups" / slug(state["title"])
+        event = slug(state.get("event") or "unknown-event")
+        export_dir = self.project_root / "writeups" / event / challenge_id
         export_dir.mkdir(parents=True, exist_ok=True)
         public_path = export_dir / "writeup.md"
         public_text = redact_flags(markdown, state.get("flags", []))

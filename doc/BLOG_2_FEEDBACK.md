@@ -277,11 +277,11 @@ Reverser는 분석 명령마다 새로운 Docker Worker를 띄운 뒤 작업이 
 
 연구용 benchmark agent보다 개인 CTF 풀이와 Git 관리에 직접 맞춘 부분이다.
 
-### 7.4 처음 30분은 공개 풀이를 검색하지 않는다
+### 7.4 공개 풀이는 검색하지 않는다
 
 단순히 solve rate만 높이는 것보다 직접 분석과 학습을 우선한다.
 
-외부 풀이와 Technique Memory는 30분이 지난 문제와 미해결 문제에서만 사용한다.
+활성 문제의 외부 풀이는 검색하지 않는다. Technique Memory는 30분이 지난 문제와 미해결 문제에서만 사용한다.
 
 ### 7.5 전체 구조가 작다
 
@@ -320,18 +320,17 @@ Solver 프로세스가 정상 종료해도 문제 상태가 계속 `solving`이�
 solved
 unsolved
 failed
-incomplete
 ```
 
 ### 8.3 플래그 후보와 실행 증거가 연결되지 않는다
 
 현재는 플래그 문자열을 기록하면 바로 `solved` 상태가 된다.
 
-앞으로는 그 값을 확인한 명령 출력도 함께 기록한다. 실제 출력에 같은 문자열이 존재할 때만 해결로 인정하는 것이 맞다.
+앞으로는 성공한 명령 출력에 같은 문자열이 존재할 때만 기록한다. 이것만으로 정답을 검증할 수는 없지만, 적어도 실행 결과에서 나온 값이라는 provenance는 확인할 수 있다.
 
 ### 8.4 30분 외의 실행 예산이 없다
 
-30분은 공개 풀이 검색을 허용하는 기준이지 실행 예산이 아니다. Solver 전체의 최대 turn, 도구 호출 수와 비용에는 별도 제한이 없다.
+30분은 로컬 Technique Memory 검색을 허용하는 기준이지 실행 예산이 아니다. Solver 전체의 최대 turn, 도구 호출 수와 비용에는 별도 제한이 없다.
 
 같은 작업을 오래 반복하지 않게 하려면 최소한 아래 값이 필요하다.
 
@@ -501,7 +500,7 @@ Agent가 검증 함수를 정확히 설명했다고 해서 문제를 푼 것은 
 
 [CrackMeBench](https://arxiv.org/abs/2605.10597)는 외부의 실행 가능한 oracle로 제출물을 판정한다. 네트워크가 차단된 Linux Docker에서 원본 실행 파일을 사용하며 모델의 설명이 아니라 프로그램이 받아들인 입력과 생성 artifact를 평가한다.
 
-Reverser의 Result Gate도 같은 원칙으로 구성한다.
+Reverser의 최소 Result Gate는 실행 결과 provenance를 확인하는 정도로 구성한다.
 
 ```json
 {
@@ -514,7 +513,7 @@ Reverser의 Result Gate도 같은 원칙으로 구성한다.
 }
 ```
 
-현재 `record_flag`는 문자열만 기록해도 상태를 `solved`로 바꾼다. 구현할 Result Gate에서는 Docker Worker가 실행한 검증 명령, 결과를 저장한 run, 성공을 나타내는 출력이나 exit code가 함께 있어야 한다.
+현재 `record_flag`는 문자열만 기록해도 상태를 `solved`로 바꾼다. 구현할 Result Gate에서는 성공한 Docker Worker run의 출력에 같은 문자열이 있어야 한다. 별도 검증 상태는 저장하지 않고 기존 `flags`와 `tool_runs`만 사용한다.
 
 문제에 자동 판정기가 없다면 로컬 실행만으로 정답을 완전히 보장하지 못할 수도 있다. 이 경우 Reviewer가 검증 방법과 남은 제한을 함께 기록한다.
 
@@ -551,7 +550,7 @@ Reviewer가 새 도구를 추천했다고 바로 Dockerfile에 설치하지는 �
 현재 코드에는 이 설계가 아직 들어가 있지 않다. 3편에서는 아래 순서로 실제 구현을 진행할 예정이다.
 
 1. 분석 명령의 non-zero 종료와 전체 run의 `failed` 상태를 분리한다.
-2. `solved`, `unsolved`, `failed`, `incomplete`와 종료 사유를 구분한다.
+2. `solved`, `unsolved`, `failed`를 구분하고 `failed`의 종료 사유를 기록한다.
 3. `record_flag`에 실행 증거를 요구하는 Result Gate를 추가한다.
 4. `progress.md`에 observations, facts, hypotheses, dead_ends, analysis_path를 저장한다.
 5. 가설의 test와 falsifier를 기록하고 반증된 가설을 dead-end로 옮긴다.
@@ -617,7 +616,7 @@ Docker 실행
   └─ 후보 발견
        ↓
 Executable Result Gate
-  ├─ 통과 → Solved → Reviewer
+  ├─ 통과 → Solved
   └─ 실패 → 가설 갱신
 
 새 증거가 없는 상태가 반복됨

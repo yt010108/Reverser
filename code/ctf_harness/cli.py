@@ -29,7 +29,7 @@ def visible(state: dict[str, Any], settings: Settings) -> dict[str, Any]:
     value["research_after_seconds"] = settings.research_after_seconds
     value["research_due"] = (
         value["elapsed_seconds"] >= settings.research_after_seconds
-        and state.get("status") not in {"solved", "unsolved"}
+        and state.get("status") not in {"solved", "unsolved", "failed"}
     )
     return value
 
@@ -62,6 +62,7 @@ def parser() -> argparse.ArgumentParser:
     flag = sub.add_parser("flag")
     flag.add_argument("challenge_id")
     flag.add_argument("--value", required=True)
+    flag.add_argument("--evidence-run", type=int, required=True)
     writeup = sub.add_parser("writeup")
     writeup.add_argument("challenge_id")
     writeup.add_argument("--file", type=Path, required=True)
@@ -69,6 +70,9 @@ def parser() -> argparse.ArgumentParser:
     unsolved = sub.add_parser("unsolved")
     unsolved.add_argument("challenge_id")
     unsolved.add_argument("--reason-file", type=Path, required=True)
+    terminate = sub.add_parser("terminate")
+    terminate.add_argument("challenge_id")
+    terminate.add_argument("--reason", required=True)
     search = sub.add_parser("solution-search")
     search.add_argument("challenge_id")
     search.add_argument("query")
@@ -119,10 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                 settings.research_after_seconds,
                 args.limit or settings.memory_search_limit,
             )
-            emit({
-                "local": local_results,
-                "next": "Use ctf_browser with ordinary Playwright to search public write-ups.",
-            })
+            emit({"local": local_results})
             return 0
         if args.action == "learn":
             emit({"saved_path": str(TechniqueMemory(PROJECT_ROOT, store).save_lesson(
@@ -138,12 +139,15 @@ def main(argv: list[str] | None = None) -> int:
             state, result = analyzer.run_command(args.challenge_id, args.profile, args.command, args.timeout)
             emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "timed_out": result.timed_out, "truncated": result.truncated})
         elif args.action == "flag":
-            state = analyzer.record_flag(args.challenge_id, args.value)
+            state = analyzer.record_flag(args.challenge_id, args.value, args.evidence_run)
             emit({"state": visible(state, settings), "recorded": True})
         elif args.action == "unsolved":
             state = analyzer.mark_unsolved(
                 args.challenge_id, args.reason_file.read_text(encoding="utf-8")
             )
+            emit(visible(state, settings))
+        elif args.action == "terminate":
+            state = analyzer.terminate(args.challenge_id, args.reason)
             emit(visible(state, settings))
         elif args.action == "writeup":
             emit(WriteupManager(PROJECT_ROOT, store).save(args.challenge_id, args.file.read_text(encoding="utf-8")))
