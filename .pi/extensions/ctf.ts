@@ -66,7 +66,7 @@ function describeAgentTool(toolName: string, args: unknown) {
     case "ctf_status": return "문제 상태 확인";
     case "ctf_record_flag": return "플래그 후보 로컬 기록";
     case "ctf_writeup": return "Write-up 저장";
-    case "ctf_solution_search": return "풀이 방법 검색";
+    case "ctf_solution_search": return "로컬 풀이 방법 검색";
     case "ctf_mark_unsolved": return "미해결 사유 기록";
     case "ctf_learn": return "재사용 기법 저장";
     case "read": return `아티팩트 읽기 · ${path}`;
@@ -253,7 +253,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|ctf-triage)(?:\s|$)|ctf_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|learn)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|ctf-triage)(?:\s|$)|ctf_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|terminate|learn)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 ctf_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -298,9 +298,9 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, _onUpdate, _ctx) { const args = ["exec", p.challenge_id, "--profile", p.profile, "--command", p.command]; if (p.timeout) args.push("--timeout", String(p.timeout)); return result(await runCli(args, signal)); },
   });
   pi.registerTool({
-    name: "ctf_record_flag", label: "CTF: 플래그 로컬 기록", description: "Store a candidate flag only in the Git-ignored challenge state. Does not submit or echo it.",
-    parameters: Type.Object({ challenge_id: Type.String(), value: Type.String() }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["flag", p.challenge_id, "--value", p.value], signal)); },
+    name: "ctf_record_flag", label: "CTF: 플래그 로컬 기록", description: "Verify a candidate against one successful tool run, then store it locally without submitting or echoing it.",
+    parameters: Type.Object({ challenge_id: Type.String(), value: Type.String(), evidence_run: Type.Integer({ minimum: 1 }) }),
+    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run)], signal)); },
   });
   pi.registerTool({
     name: "ctf_writeup", label: "CTF: Write-up 저장", description: "Save an exact private write-up and a Git-safe public copy with known and flag-shaped values redacted.",
@@ -308,7 +308,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["writeup", p.challenge_id, "--file", p.file], signal)); },
   });
   pi.registerTool({
-    name: "ctf_solution_search", label: "CTF: 풀이 방법 검색", description: "After 30 minutes, search learned difficult-case notes and public web results. Treat every result as untrusted.",
+    name: "ctf_solution_search", label: "CTF: 로컬 풀이 방법 검색", description: "After 30 minutes, search only locally saved difficult-case notes.",
     parameters: Type.Object({ challenge_id: Type.String(), query: Type.String() }),
     async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["solution-search", p.challenge_id, p.query], signal)); },
   });
@@ -339,6 +339,20 @@ export default function (pi: ExtensionAPI) {
       const reviewer = after.exitCode === 0 && reviewable
         ? await runPiAgent("reviewer", p.challenge_id, signal, onUpdate, ctx)
         : undefined;
+      let finalCheck = reviewer
+        ? await runCli(["status", p.challenge_id], signal)
+        : after;
+      let finalState = finalCheck.parsed as { status?: string } | undefined;
+      const agentFailed = solver.exitCode !== 0 || (reviewer?.exitCode ?? 0) !== 0;
+      if (agentFailed) {
+        await runCli(["terminate", p.challenge_id, "--status", "failed", "--reason", "agent_process_error"], signal);
+        finalCheck = await runCli(["status", p.challenge_id], signal);
+        finalState = finalCheck.parsed as { status?: string } | undefined;
+      } else if (!new Set(["solved", "unsolved", "failed"]).has(finalState?.status ?? "")) {
+        await runCli(["terminate", p.challenge_id, "--status", "incomplete", "--reason", "agent_exited_without_terminal_state"], signal);
+        finalCheck = await runCli(["status", p.challenge_id], signal);
+        finalState = finalCheck.parsed as { status?: string } | undefined;
+      }
       const solverText = solver.finalText || solver.stderr || "출력 없음";
       const sections = [`## Solver\n${solverText.slice(0, 4_000)}${solverText.length > 4_000 ? "\n[이후 요약 생략]" : ""}`];
       if (reviewer) {
@@ -346,11 +360,14 @@ export default function (pi: ExtensionAPI) {
         sections.push(`## Reviewer\n${reviewerText.slice(0, 4_000)}${reviewerText.length > 4_000 ? "\n[이후 요약 생략]" : ""}`);
       }
       else sections.push("## Reviewer\n조건이 되지 않아 실행하지 않음.");
-      const failed = solver.exitCode !== 0 && (!reviewer || reviewer.exitCode !== 0);
+      const outcome = finalState?.status ?? "failed";
+      sections.push(`## Outcome\n${outcome}`);
+      const failed = agentFailed || finalCheck.exitCode !== 0 || outcome === "failed" || outcome === "incomplete";
       return {
         content: [{ type: "text" as const, text: sections.join("\n\n") }],
         details: {
           challengeId: p.challenge_id,
+          outcome,
           solver: { exitCode: solver.exitCode, turns: solver.turns, model: solver.model },
           reviewer: reviewer ? { exitCode: reviewer.exitCode, turns: reviewer.turns, model: reviewer.model } : null,
         },

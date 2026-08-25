@@ -29,7 +29,7 @@ class TechniqueMemory:
         if elapsed < research_after_seconds and state.get("status") != "unsolved":
             remaining = research_after_seconds - elapsed
             raise MemoryError(f"Direct solve budget has {remaining} seconds remaining")
-        if state.get("status") not in {"solving", "researching", "unsolved", "failed"}:
+        if state.get("status") not in {"solving", "researching", "unsolved"}:
             raise MemoryError("Solution search is only available for an active or unsolved challenge")
         if state.get("status") != "unsolved":
             state["status"] = "researching"

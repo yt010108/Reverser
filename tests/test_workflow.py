@@ -120,6 +120,66 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(updated["status"], "solving")
 
+    def test_failed_analysis_command_does_not_fail_challenge(self):
+        class Worker:
+            def run(self, *, profile, command, **_kwargs):
+                return CommandResult(profile, command, 1, "", "not found")
+
+        state = self.store.create(title="Retryable", platform_url="")
+        state["status"] = "solving"
+        self.store.save(state)
+        updated, result = Analyzer(self.store, Worker()).run_command(
+            state["challenge_id"], "core", "strings missing"
+        )
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(updated["status"], "solving")
+        self.assertEqual(updated["tool_runs"][-1]["exit_code"], 1)
+
+    def test_flag_requires_successful_run_containing_candidate(self):
+        flag = "TEST" + "{verified}"
+
+        class Worker:
+            def __init__(self, result):
+                self.result = result
+
+            def run(self, **_kwargs):
+                return self.result
+
+        state = self.store.create(title="Gate", platform_url="")
+        state["status"] = "solving"
+        self.store.save(state)
+        analyzer = Analyzer(
+            self.store, Worker(CommandResult("core", "check", 0, "wrong", ""))
+        )
+        analyzer.run_command(state["challenge_id"], "core", "check")
+        candidate, verified = analyzer.record_flag(state["challenge_id"], flag, 1)
+        self.assertFalse(verified)
+        self.assertEqual(candidate["status"], "solving")
+        self.assertIn(flag, candidate["flag_candidates"])
+        self.assertNotIn(flag, candidate["flags"])
+        projected = public_state(candidate)
+        self.assertEqual(projected["flag_candidates"], 1)
+        self.assertNotIn(flag, json.dumps(projected))
+
+        analyzer.worker = Worker(CommandResult("core", "verify", 0, flag, ""))
+        analyzer.run_command(state["challenge_id"], "core", "verify")
+        solved, verified = analyzer.record_flag(state["challenge_id"], flag, 2)
+        self.assertTrue(verified)
+        self.assertEqual(solved["status"], "solved")
+        self.assertEqual(solved["flag_evidence"], [{"value": flag, "evidence_run": 2}])
+        self.assertNotIn("flags", public_state(solved))
+        self.assertNotIn("flag_evidence", public_state(solved))
+
+    def test_incomplete_terminal_state_records_reason(self):
+        state = self.store.create(title="Incomplete", platform_url="")
+        state["status"] = "solving"
+        self.store.save(state)
+        updated = Analyzer(self.store, object()).terminate(
+            state["challenge_id"], "incomplete", "agent_exited_without_terminal_state"
+        )
+        self.assertEqual(updated["status"], "incomplete")
+        self.assertEqual(updated["exit_reason"], "agent_exited_without_terminal_state")
+
     def test_writeup_keeps_private_and_redacts_export(self):
         state = self.store.create(title="Writeup Test", platform_url="https://ctf.example/challenge")
         flag = "TEST" + "{private-value}"
@@ -130,6 +190,15 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn(flag, Path(paths["public"]).read_text(encoding="utf-8"))
         metadata = json.loads((Path(paths["export_dir"]) / "metadata.json").read_text(encoding="utf-8"))
         self.assertNotIn("flags", metadata)
+
+    def test_writeup_paths_do_not_collide_for_duplicate_titles(self):
+        first = self.store.create(title="Same Title", platform_url="", event="Event")
+        second = self.store.create(title="Same Title", platform_url="", event="Event")
+        manager = WriteupManager(self.root, self.store)
+        first_path = manager.save(first["challenge_id"], "# First")["export_dir"]
+        second_path = manager.save(second["challenge_id"], "# Second")["export_dir"]
+        self.assertNotEqual(first_path, second_path)
+        self.assertEqual(Path(first_path).parent.name, "event")
 
 
 if __name__ == "__main__":
