@@ -49,7 +49,7 @@ Pi TUI는 자식의 사고 과정이나 명령 출력 전문을 가져오지 않
 [Reviewer] Write-up 저장 · 완료 · 0.4초
 ```
 
-30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. Solver 종료 후 해결·미해결·30분 초과 문제만 새 Reviewer가 검토한다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
+30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. Solver 종료 후 미해결·30분 초과 문제만 새 Reviewer가 검토한다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
 
 ## Playwright 브라우저
 
@@ -123,7 +123,7 @@ runs/<CHALLENGE_ID>/
 └── reports/
 ```
 
-`progress.md`에 `solving`, `researching`, `solved`, `unsolved`, `failed`, `incomplete` 상태와 경과시간, 실행 기록을 함께 저장한다. 실제 플래그와 비공개 write-up은 `runs/`에만 남고, 플래그를 제거한 결과만 `writeups/`에 저장한다.
+`progress.md`에 `solving`, `researching`, `solved`, `unsolved`, `failed` 상태와 경과시간, 실행 기록을 함께 저장한다. 실제 플래그와 비공개 write-up은 `runs/`에만 남고, 플래그를 제거한 결과만 `writeups/`에 저장한다.
 
 ## 직접 CLI
 

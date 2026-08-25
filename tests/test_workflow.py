@@ -152,32 +152,26 @@ class WorkflowTests(unittest.TestCase):
             self.store, Worker(CommandResult("core", "check", 0, "wrong", ""))
         )
         analyzer.run_command(state["challenge_id"], "core", "check")
-        candidate, verified = analyzer.record_flag(state["challenge_id"], flag, 1)
-        self.assertFalse(verified)
-        self.assertEqual(candidate["status"], "solving")
-        self.assertIn(flag, candidate["flag_candidates"])
-        self.assertNotIn(flag, candidate["flags"])
-        projected = public_state(candidate)
-        self.assertEqual(projected["flag_candidates"], 1)
-        self.assertNotIn(flag, json.dumps(projected))
+        with self.assertRaises(RuntimeError):
+            analyzer.record_flag(state["challenge_id"], flag, 1)
+        unchanged = self.store.load(state["challenge_id"])
+        self.assertEqual(unchanged["status"], "solving")
+        self.assertNotIn(flag, unchanged["flags"])
 
         analyzer.worker = Worker(CommandResult("core", "verify", 0, flag, ""))
         analyzer.run_command(state["challenge_id"], "core", "verify")
-        solved, verified = analyzer.record_flag(state["challenge_id"], flag, 2)
-        self.assertTrue(verified)
+        solved = analyzer.record_flag(state["challenge_id"], flag, 2)
         self.assertEqual(solved["status"], "solved")
-        self.assertEqual(solved["flag_evidence"], [{"value": flag, "evidence_run": 2}])
         self.assertNotIn("flags", public_state(solved))
-        self.assertNotIn("flag_evidence", public_state(solved))
 
-    def test_incomplete_terminal_state_records_reason(self):
-        state = self.store.create(title="Incomplete", platform_url="")
+    def test_failed_terminal_state_records_reason(self):
+        state = self.store.create(title="Failed", platform_url="")
         state["status"] = "solving"
         self.store.save(state)
         updated = Analyzer(self.store, object()).terminate(
-            state["challenge_id"], "incomplete", "agent_exited_without_terminal_state"
+            state["challenge_id"], "agent_exited_without_terminal_state"
         )
-        self.assertEqual(updated["status"], "incomplete")
+        self.assertEqual(updated["status"], "failed")
         self.assertEqual(updated["exit_reason"], "agent_exited_without_terminal_state")
 
     def test_writeup_keeps_private_and_redacts_export(self):
@@ -199,6 +193,7 @@ class WorkflowTests(unittest.TestCase):
         second_path = manager.save(second["challenge_id"], "# Second")["export_dir"]
         self.assertNotEqual(first_path, second_path)
         self.assertEqual(Path(first_path).parent.name, "event")
+        self.assertEqual(Path(first_path).name, first["challenge_id"])
 
 
 if __name__ == "__main__":

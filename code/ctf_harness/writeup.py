@@ -21,12 +21,10 @@ class WriteupManager:
         self.store.register_artifact(state, private_path, "private-writeup")
 
         event = slug(state.get("event") or "unknown-event")
-        title = slug(state["title"])
-        export_dir = self.project_root / "writeups" / event / f"{title}-{challenge_id[-8:]}"
+        export_dir = self.project_root / "writeups" / event / challenge_id
         export_dir.mkdir(parents=True, exist_ok=True)
         public_path = export_dir / "writeup.md"
-        private_values = state.get("flags", []) + state.get("flag_candidates", [])
-        public_text = redact_flags(markdown, private_values)
+        public_text = redact_flags(markdown, state.get("flags", []))
         public_path.write_text(public_text.rstrip() + "\n", encoding="utf-8", newline="\n")
         metadata = {
             "title": state["title"],
@@ -56,7 +54,7 @@ class WriteupManager:
                 text = source.read_text(encoding="utf-8", errors="replace")
                 destination = export_dir / source.name
                 destination.write_text(
-                    redact_flags(text, private_values),
+                    redact_flags(text, state.get("flags", [])),
                     encoding="utf-8",
                     newline="\n",
                 )

@@ -298,7 +298,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, _onUpdate, _ctx) { const args = ["exec", p.challenge_id, "--profile", p.profile, "--command", p.command]; if (p.timeout) args.push("--timeout", String(p.timeout)); return result(await runCli(args, signal)); },
   });
   pi.registerTool({
-    name: "ctf_record_flag", label: "CTF: 플래그 로컬 기록", description: "Verify a candidate against one successful tool run, then store it locally without submitting or echoing it.",
+    name: "ctf_record_flag", label: "CTF: 플래그 로컬 기록", description: "Require the candidate to appear in one successful tool run, then store it locally without submitting or echoing it.",
     parameters: Type.Object({ challenge_id: Type.String(), value: Type.String(), evidence_run: Type.Integer({ minimum: 1 }) }),
     async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run)], signal)); },
   });
@@ -327,7 +327,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, _p, signal, _onUpdate, _ctx) { return result(await runCli(["dashboard"], signal)); },
   });
   pi.registerTool({
-    name: "ctf_solve", label: "CTF: 풀이 오케스트레이션", description: "Solve one imported challenge in an isolated Pi context, then automatically run a fresh reviewer when solved, unsolved, or research-due.",
+    name: "ctf_solve", label: "CTF: 풀이 오케스트레이션", description: "Solve one imported challenge in an isolated Pi context, then automatically run a fresh reviewer only when unsolved or research-due.",
     parameters: Type.Object({ challenge_id: Type.String() }),
     async execute(_id, p, signal, onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
@@ -335,7 +335,7 @@ export default function (pi: ExtensionAPI) {
       const solver = await runPiAgent("solver", p.challenge_id, signal, onUpdate, ctx);
       const after = await runCli(["status", p.challenge_id], signal);
       const state = after.parsed as { status?: string; research_due?: boolean } | undefined;
-      const reviewable = state?.status === "solved" || state?.status === "unsolved" || state?.research_due === true;
+      const reviewable = state?.status === "unsolved" || state?.research_due === true;
       const reviewer = after.exitCode === 0 && reviewable
         ? await runPiAgent("reviewer", p.challenge_id, signal, onUpdate, ctx)
         : undefined;
@@ -345,11 +345,11 @@ export default function (pi: ExtensionAPI) {
       let finalState = finalCheck.parsed as { status?: string } | undefined;
       const agentFailed = solver.exitCode !== 0 || (reviewer?.exitCode ?? 0) !== 0;
       if (agentFailed) {
-        await runCli(["terminate", p.challenge_id, "--status", "failed", "--reason", "agent_process_error"], signal);
+        await runCli(["terminate", p.challenge_id, "--reason", "agent_process_error"], signal);
         finalCheck = await runCli(["status", p.challenge_id], signal);
         finalState = finalCheck.parsed as { status?: string } | undefined;
       } else if (!new Set(["solved", "unsolved", "failed"]).has(finalState?.status ?? "")) {
-        await runCli(["terminate", p.challenge_id, "--status", "incomplete", "--reason", "agent_exited_without_terminal_state"], signal);
+        await runCli(["terminate", p.challenge_id, "--reason", "agent_exited_without_terminal_state"], signal);
         finalCheck = await runCli(["status", p.challenge_id], signal);
         finalState = finalCheck.parsed as { status?: string } | undefined;
       }
@@ -362,7 +362,7 @@ export default function (pi: ExtensionAPI) {
       else sections.push("## Reviewer\n조건이 되지 않아 실행하지 않음.");
       const outcome = finalState?.status ?? "failed";
       sections.push(`## Outcome\n${outcome}`);
-      const failed = agentFailed || finalCheck.exitCode !== 0 || outcome === "failed" || outcome === "incomplete";
+      const failed = agentFailed || finalCheck.exitCode !== 0 || outcome === "failed";
       return {
         content: [{ type: "text" as const, text: sections.join("\n\n") }],
         details: {
