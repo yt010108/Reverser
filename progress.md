@@ -1,8 +1,11 @@
 # Progress
 
-## 폴더 구조 (2026-08-24 재정리)
+## 폴더 구조 (2026-08-25 l3ak 정리)
 - `runs/dreamhack-reversing-c1..c5/` — 드림핵 리버싱 클래스별
-- `runs/l3akctf-2026/` — L3akCTF 2026 rev 6문제
+- `runs/l3ak2026/` — L3ak 2026 아카이브 전부 (구 l3akctf-2026 6문제 포함,
+  solved: subleq-scramble·what-who). `writeups/l3ak2026/`도 동일 구조.
+- 활성 진행 4문제(buzzword/drippy/omega/yet-another-chat)만 ctf_* 도구 접근을 위해
+  runs/ 최상위에 둠 — 완료 후 l3ak2026/로 이동
 - `writeups/`도 동일 구조 (공개용은 플래그 redacted)
 - 예전 문서 내 `runs/<id>/...` 경로는 `runs/<분류>/<id>/...`로 읽을 것
 

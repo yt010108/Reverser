@@ -1,0 +1,21 @@
+{
+  "title": "BrunnerCTF 2026 Go Go Decompile",
+  "event": "BrunnerCTF 2026 rev",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "brunnerctf-2026-go-go-decompile-a9a1c679",
+  "attachments": [
+    {
+      "name": "README.md",
+      "size": 301,
+      "sha256": "e989bc7a710cd172e875d115d314853fc49ce786575fa477e997dca1cf166179"
+    },
+    {
+      "name": "go_go_budgetmaster",
+      "size": 2135080,
+      "sha256": "21ee9655a76675ee5611bdf49c6a83c31e3d15a0f49ecf8205359251d7bb578a"
+    }
+  ]
+}

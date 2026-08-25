@@ -1,0 +1,21 @@
+{
+  "title": "BrunnerCTF 2026 Decompile",
+  "event": "BrunnerCTF 2026 rev",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "brunnerctf-2026-decompile-6a9bd625",
+  "attachments": [
+    {
+      "name": "README.md",
+      "size": 546,
+      "sha256": "cb2d612fa9e8f534f2259a9b0c5641c8642896c3b7a5fd8413c4908e8e92b984"
+    },
+    {
+      "name": "vault",
+      "size": 20912,
+      "sha256": "6abff6882db15ee0917bbb04fc740210318d21e5c4905cdf8d7c7a2b715a62e1"
+    }
+  ]
+}

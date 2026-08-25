@@ -1,0 +1,21 @@
+{
+  "title": "BrunnerCTF 2026 KPWhy",
+  "event": "BrunnerCTF 2026 rev",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "brunnerctf-2026-kpwhy-9358c495",
+  "attachments": [
+    {
+      "name": "README.md",
+      "size": 340,
+      "sha256": "06e9b1ed3dea11b3a839c8cf1ff2dc42c2d9dd07b835fc725859e6d0cd62d26e"
+    },
+    {
+      "name": "kpiman",
+      "size": 16384,
+      "sha256": "7cd0efadf332b19c6d219ae48c1d4ddbd552687b76cc0712dcc6a6c5cc28f393"
+    }
+  ]
+}
