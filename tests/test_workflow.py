@@ -174,6 +174,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(updated["status"], "failed")
         self.assertEqual(updated["exit_reason"], "agent_exited_without_terminal_state")
 
+    def test_terminate_preserves_completed_challenge_status(self):
+        for status in ("solved", "unsolved"):
+            with self.subTest(status=status):
+                state = self.store.create(title=f"Completed {status}", platform_url="")
+                state["status"] = status
+                state["finished_at"] = state["created_at"]
+                self.store.save(state)
+                updated = Analyzer(self.store, object()).terminate(
+                    state["challenge_id"], "agent_process_error"
+                )
+                self.assertEqual(updated["status"], status)
+                self.assertEqual(updated["exit_reason"], "agent_process_error")
+
     def test_writeup_keeps_private_and_redacts_export(self):
         state = self.store.create(title="Writeup Test", platform_url="https://ctf.example/challenge")
         flag = "TEST" + "{private-value}"
