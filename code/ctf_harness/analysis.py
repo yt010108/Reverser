@@ -115,9 +115,10 @@ class Analyzer:
 
     def terminate(self, challenge_id: str, exit_reason: str) -> dict[str, Any]:
         state = self.store.load(challenge_id)
-        state["status"] = "failed"
         state["exit_reason"] = exit_reason
-        state["finished_at"] = state.get("finished_at") or utc_now()
+        if state.get("status") not in {"solved", "unsolved"}:
+            state["status"] = "failed"
+            state["finished_at"] = state.get("finished_at") or utc_now()
         self.store.save(state)
         return state
 
