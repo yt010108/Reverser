@@ -117,7 +117,7 @@ function runPiAgent(
     const roleLabel = role === "solver" ? "Solver" : "Reviewer";
 
     const publish = (status: string) => onUpdate?.({
-      content: [{ type: "text", text: `[${roleLabel}] ${status}` }],
+      content: [{ type: "text", text: `[${roleLabel} · ${challengeId}] ${status}` }],
       details: { role, challengeId, turns, model: childModel },
     });
     const consume = (line: string) => {
