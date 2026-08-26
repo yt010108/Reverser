@@ -8,9 +8,11 @@ from .storage import ChallengeStore
 
 
 class ChallengeImporter:
+    # ChallengeStore를 받아 Importer 초기화
     def __init__(self, store: ChallengeStore) -> None:
         self.store = store
 
+    # 로컬 파일들을 runs로 가져옴 — title/event 검증 후 original에 복사하고 imported로 마킹, 실패 시 failed
     def import_local(
         self,
         *,

@@ -14,10 +14,12 @@ class AnalysisError(RuntimeError):
 
 
 class Analyzer:
+    # ChallengeStore와 DockerWorker를 주입받아 Analyzer 초기화
     def __init__(self, store: ChallengeStore, worker: DockerWorker) -> None:
         self.store = store
         self.worker = worker
 
+    # core 워커에서 reverser-triage를 실행해 triage.json 생성, ELF/PE 아키텍처 파싱 후 성공 시 solving, 실패 시 failed로 전환
     def triage(self, challenge_id: str) -> tuple[dict[str, Any], CommandResult]:
         state = self.store.load(challenge_id)
         root = self.store.challenge_dir(challenge_id)
@@ -54,6 +56,7 @@ class Analyzer:
         self.store.save(state)
         return state, result
 
+    # 지정 프로필(core/dynamic/ghidra/angr)로 격리 워커에서 명령 실행 — triage 후 solving/researching 상태에서만 허용
     def run_command(
         self,
         challenge_id: str,
@@ -77,6 +80,7 @@ class Analyzer:
         self.store.save(state)
         return state, result
 
+    # 증거 run의 stdout/stderr에 플래그가 찍혀있는지 검증 후 flags에 추가하고 solved로 전환
     def record_flag(
         self, challenge_id: str, flag: str, evidence_run: int
     ) -> dict[str, Any]:
@@ -113,6 +117,7 @@ class Analyzer:
         self.store.save(state)
         return state
 
+    # 에이전트 비정상 종료 시 failed로 마킹하고 exit_reason을 남김 — solved/unsolved는 유지
     def terminate(self, challenge_id: str, exit_reason: str) -> dict[str, Any]:
         state = self.store.load(challenge_id)
         state["exit_reason"] = exit_reason
@@ -122,6 +127,7 @@ class Analyzer:
         self.store.save(state)
         return state
 
+    # 풀이 불가 시 blocker 요약을 기록하고 unsolved로 마킹
     def mark_unsolved(self, challenge_id: str, blocker: str) -> dict[str, Any]:
         state = self.store.load(challenge_id)
         if not blocker.strip():
@@ -132,6 +138,7 @@ class Analyzer:
         self.store.save(state)
         return state
 
+    # 워커 결과를 output/0001-profile.stdout.log 형태로 저장하고 tool_runs 메타를 state에 추가
     def _record_run(
         self, state: dict[str, Any], label: str, result: CommandResult
     ) -> None:

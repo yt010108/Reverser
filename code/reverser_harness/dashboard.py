@@ -6,6 +6,7 @@ from pathlib import Path
 from .storage import ChallengeStore
 
 
+# store.list()를 테이블로 렌더링해 dashboard.html을 생성 — 플래그는 개수만 노출, 값은 숨김
 def build_dashboard(project_root: Path, store: ChallengeStore) -> Path:
     rows = []
     for item in store.list():
