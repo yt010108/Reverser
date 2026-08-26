@@ -173,7 +173,7 @@ class ChallengeStore:
             raise FileNotFoundError(f"Invalid challenge state: {challenge_id}")
         return value
 
-    # 상태를 progress.md에 저장 — 상단에 чел린지 메타, 하단에 tool_runs 테이블, JSON은 주석에 보관
+    # 상태를 progress.md에 저장 — 상단에 챌린지 메타, 하단에 tool_runs 테이블, JSON은 주석에 보관
     def save(self, state: dict[str, Any]) -> None:
         state["updated_at"] = utc_now()
         tools = state.get("tool_runs", [])
