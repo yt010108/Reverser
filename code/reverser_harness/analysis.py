@@ -19,7 +19,7 @@ class Analyzer:
         self.store = store
         self.worker = worker
 
-    # core 워커에서 reverser-triage를 실행해 triage.json 생성, ELF/PE 아키텍처 파싱 후 solving으로 전환
+    # core 워커에서 reverser-triage를 실행해 triage.json 생성, ELF/PE 아키텍처 파싱 후 성공 시 solving, 실패 시 failed로 전환
     def triage(self, challenge_id: str) -> tuple[dict[str, Any], CommandResult]:
         state = self.store.load(challenge_id)
         root = self.store.challenge_dir(challenge_id)
