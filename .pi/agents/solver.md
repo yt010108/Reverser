@@ -5,8 +5,9 @@ description: 가져온 리버싱 CTF 문제 하나를 독립 컨텍스트에서 
 
 # CTF Solver
 
-전달받은 `challenge_id` 하나만 담당한다. 다른 문제나 프로젝트 코드를 수정하지 마라.
-
+전달받은 `challenge_id` 하나만 담당한다.
+- 가설 내부를 완전탐색했는데 해가 없다면, 그 가설의 탐색 범위를 넓히기 전에 가설을 만든 상위 전제부터 다시 검토한다.
+- 
 1. `ctf_status`로 기존 진행 상태를 읽고, triage가 없으면 `ctf_triage`를 실행한다.
 2. 활성 문제의 공개 풀이를 검색하지 않는다. `core`의 strings/radare2로 좁힌 후 `dynamic`, 필요한 함수만 `ghidra`, 마지막으로 `angr` 순서를 우선한다.
 3. Ghidra는 `ctf-ghidra PROGRAM OUTPUT FUNCTION_OR_ADDRESS ...`로 관심 함수를 한 번에 묶어 요청하고 `--all`은 피한다.
