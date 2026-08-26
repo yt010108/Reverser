@@ -61,6 +61,18 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('"--evidence-run"', extension)
         self.assertNotIn("public web results", extension)
 
+    def test_agent_progress_updates_include_challenge_id(self):
+        extension = (ROOT / ".pi" / "extensions" / "ctf.ts").read_text(encoding="utf-8")
+        self.assertIn(
+            'const challengeLabel = title ? `${title} (${challengeId})` : challengeId;',
+            extension,
+        )
+        self.assertIn('text: `[${roleLabel} · ${challengeLabel}] ${status}`', extension)
+        self.assertIn("initialState?.title", extension)
+        self.assertIn("state?.title", extension)
+        self.assertIn('publish("에이전트 시작")', extension)
+        self.assertIn('publish(`에이전트 ${code === 0 ? "완료" : "종료"}', extension)
+
 
 if __name__ == "__main__":
     unittest.main()

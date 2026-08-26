@@ -82,6 +82,7 @@ function describeAgentTool(toolName: string, args: unknown) {
 function runPiAgent(
   role: AgentRole,
   challengeId: string,
+  challengeTitle: string | undefined,
   signal: AbortSignal | undefined,
   onUpdate: ((value: any) => void) | undefined,
   context: { model?: { provider: string; id: string }; thinkingLevel?: string },
@@ -115,9 +116,11 @@ function runPiAgent(
     const agentStartedAt = Date.now();
     let running: { description: string; startedAt: number } | undefined;
     const roleLabel = role === "solver" ? "Solver" : "Reviewer";
+    const title = challengeTitle?.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 80);
+    const challengeLabel = title ? `${title} (${challengeId})` : challengeId;
 
     const publish = (status: string) => onUpdate?.({
-      content: [{ type: "text", text: `[${roleLabel}] ${status}` }],
+      content: [{ type: "text", text: `[${roleLabel} · ${challengeLabel}] ${status}` }],
       details: { role, challengeId, turns, model: childModel },
     });
     const consume = (line: string) => {
@@ -332,12 +335,13 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
-      const solver = await runPiAgent("solver", p.challenge_id, signal, onUpdate, ctx);
+      const initialState = current.parsed as { title?: string } | undefined;
+      const solver = await runPiAgent("solver", p.challenge_id, initialState?.title, signal, onUpdate, ctx);
       const after = await runCli(["status", p.challenge_id], signal);
       const state = after.parsed as { status?: string; research_due?: boolean } | undefined;
       const reviewable = state?.status === "unsolved" || state?.research_due === true;
       const reviewer = after.exitCode === 0 && reviewable
-        ? await runPiAgent("reviewer", p.challenge_id, signal, onUpdate, ctx)
+        ? await runPiAgent("reviewer", p.challenge_id, initialState?.title, signal, onUpdate, ctx)
         : undefined;
       let finalCheck = reviewer
         ? await runCli(["status", p.challenge_id], signal)
@@ -381,7 +385,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
-      const state = current.parsed as { status?: string; research_due?: boolean } | undefined;
+      const state = current.parsed as { title?: string; status?: string; research_due?: boolean } | undefined;
       const reviewable = state?.status === "solved" || state?.status === "unsolved" || state?.research_due === true;
       if (!reviewable) {
         return {
@@ -389,7 +393,7 @@ export default function (pi: ExtensionAPI) {
           details: { role: "reviewer", challengeId: p.challenge_id, skipped: true },
         };
       }
-      const reviewer = await runPiAgent("reviewer", p.challenge_id, signal, onUpdate, ctx);
+      const reviewer = await runPiAgent("reviewer", p.challenge_id, state?.title, signal, onUpdate, ctx);
       const failed = reviewer.exitCode !== 0;
       const text = failed
         ? `reviewer 실행 실패 (exit ${reviewer.exitCode})\n${reviewer.stderr || reviewer.finalText || "출력 없음"}`
