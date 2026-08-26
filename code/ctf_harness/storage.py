@@ -78,10 +78,35 @@ class ChallengeStore:
 
     def challenge_dir(self, challenge_id: str) -> Path:
         validate_id(challenge_id)
-        destination = (self.root / challenge_id).resolve()
-        if destination.parent != self.root:
+        direct = (self.root / challenge_id).resolve()
+        if (direct / "progress.md").is_file():
+            return direct
+        # search recursively for existing challenge (supports runs/<event>/<id>)
+        root_resolved = self.root.resolve()
+        for path in self.root.rglob("progress.md"):
+            if path.parent.name == challenge_id:
+                try:
+                    candidate = path.parent.resolve()
+                    candidate.relative_to(root_resolved)
+                    return candidate
+                except ValueError:
+                    continue
+        # also check for directory named challenge_id without progress yet (create -> save window)
+        for candidate in self.root.rglob(challenge_id):
+            if candidate.is_dir() and candidate.name == challenge_id:
+                try:
+                    resolved = candidate.resolve()
+                    resolved.relative_to(root_resolved)
+                    # ensure it's a challenge dir (has original/work/output subdirs or is under event)
+                    return resolved
+                except ValueError:
+                    continue
+        # not found yet — return direct path (legacy flat) with escape check
+        try:
+            direct.relative_to(root_resolved)
+        except ValueError:
             raise ValueError("Challenge path escapes store")
-        return destination
+        return direct
 
     def create(
         self,
@@ -91,7 +116,15 @@ class ChallengeStore:
         event: str = "",
     ) -> dict[str, Any]:
         challenge_id = f"{slug(title)}-{uuid.uuid4().hex[:8]}"
-        root = self.challenge_dir(challenge_id)
+        event_slug = slug(event) if event.strip() else ""
+        if event_slug:
+            root = (self.root / event_slug / challenge_id).resolve()
+            try:
+                root.relative_to(self.root.resolve())
+            except ValueError:
+                raise ValueError("Challenge path escapes store")
+        else:
+            root = self.challenge_dir(challenge_id)
         for name in ("original", "work", "output", "reports"):
             (root / name).mkdir(parents=True)
         state: dict[str, Any] = {
@@ -172,7 +205,7 @@ class ChallengeStore:
 
     def list(self) -> list[dict[str, Any]]:
         items = []
-        for path in self.root.glob("*/progress.md"):
+        for path in self.root.rglob("progress.md"):
             try:
                 value = self.load(path.parent.name)
             except FileNotFoundError:
