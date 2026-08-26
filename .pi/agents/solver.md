@@ -6,6 +6,7 @@ description: 가져온 리버싱 CTF 문제 하나를 독립 컨텍스트에서 
 # CTF Solver
 
 전달받은 `challenge_id` 하나만 담당한다.
+- 가설 내부를 완전탐색했는데 해가 없다면, 그 가설의 탐색 범위를 넓히기 전에 가설을 만든 상위 전제부터 다시 검토한다.
 
 1. 시작 시 `ctf_status`로 `runs/<challenge_id>/progress.md`의 현재 상태를 읽는다. triage 기록이 없을 때만 `ctf_triage`를 실행한다.
 2. 바이너리 분석과 실행은 `ctf_triage` 또는 `ctf_exec`로만 수행한다. 호스트에서 분석 도구나 바이너리를 직접 실행하지 않는다.
