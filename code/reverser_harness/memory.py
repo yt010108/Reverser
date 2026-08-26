@@ -22,7 +22,7 @@ class TechniqueMemory:
         self.index_path = self.project_root / "memory" / "index.sqlite"
         self.techniques_dir.mkdir(parents=True, exist_ok=True)
 
-    # research_due(30분 경과 또는 unsolved)일 때만 로컬 기법 검색을 허용 — 시간 가드 후 researching으로 전환
+    # research_after_seconds 경과 또는 unsolved일 때만 로컬 기법 검색을 허용 — 시간 가드 후 researching으로 전환
     def search_for_challenge(
         self, challenge_id: str, query: str, research_after_seconds: int, limit: int
     ) -> list[dict[str, Any]]:
@@ -42,7 +42,7 @@ class TechniqueMemory:
         self.store.save(state)
         return self.search(query, limit)
 
-    # 30분 이상 또는 unsolved 문제의 재사용 기법을 memory/techniques/에 저장 — solved는 거부, 플래그 포함도 거부
+    # research를 시작했거나 unsolved인 문제의 재사용 기법을 memory/techniques/에 저장 — 플래그 포함은 거부
     def save_lesson(self, challenge_id: str, content: str) -> Path:
         state = self.store.load(challenge_id)
         if not state.get("research_started_at") and state.get("status") != "unsolved":
