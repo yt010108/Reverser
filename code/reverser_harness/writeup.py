@@ -7,10 +7,12 @@ from .storage import ChallengeStore, atomic_write_json
 
 
 class WriteupManager:
+    # project_root와 ChallengeStore로 WriteupManager 초기화
     def __init__(self, project_root: Path, store: ChallengeStore) -> None:
         self.project_root = project_root.resolve()
         self.store = store
 
+    # 비공개 writeup을 reports/writeup.private.md에 저장하고, 플래그 제거한 공개본을 writeups/<event>/<id>/에 export
     def save(self, challenge_id: str, markdown: str) -> dict[str, str]:
         state = self.store.load(challenge_id)
         if not markdown.strip():

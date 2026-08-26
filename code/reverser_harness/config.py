@@ -26,6 +26,7 @@ class Settings:
     max_output_bytes: int
     memory_search_limit: int
 
+    # config.toml을 읽고 검증해 Settings 객체를 생성 — 이미지, 타임아웃, 리서치 임계값 등 파싱
     @classmethod
     def load(cls, project_root: Path) -> "Settings":
         root = project_root.resolve()

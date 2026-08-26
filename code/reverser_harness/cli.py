@@ -20,10 +20,12 @@ from .writeup import WriteupManager
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+# JSON을 pretty-print로 stdout에 출력
 def emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2))
 
 
+# public_state에 research_after_seconds와 research_due 플래그를 더해 CLI 노출용 상태를 만듦
 def visible(state: dict[str, Any], settings: Settings) -> dict[str, Any]:
     value = public_state(state)
     value["research_after_seconds"] = settings.research_after_seconds
@@ -34,6 +36,7 @@ def visible(state: dict[str, Any], settings: Settings) -> dict[str, Any]:
     return value
 
 
+# reverser CLI의 argparse 파서 구성 — doctor/list/status/import/triage/exec/flag/writeup 등 서브커맨드 정의
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="reverser-harness")
     result.add_argument("--version", action="version", version=__version__)
@@ -85,6 +88,7 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
+# CLI 진입점 — Settings/ChallengeStore 로드 후 각 액션별로 Analyzer/Importer 등을 호출해 JSON으로 응답
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:

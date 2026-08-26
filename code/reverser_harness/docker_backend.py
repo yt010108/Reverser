@@ -27,12 +27,14 @@ class CommandResult:
 
 
 class DockerWorker:
+    # Settings의 이미지/리소스 제한으로 DockerWorker 초기화 — docker 바이너리 존재 확인
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.docker = shutil.which("docker")
         if not self.docker:
             raise BackendError("docker was not found on PATH")
 
+    # docker image inspect로 각 프로필(core/dynamic/ghidra/angr) 이미지 가용성 점검
     def doctor(self) -> dict[str, object]:
         profiles: dict[str, dict[str, object]] = {}
         for profile, image in self.settings.images.items():
@@ -57,6 +59,7 @@ class DockerWorker:
             "core_ready": bool(profiles["core"]["available"]),
         }
 
+    # 격리 컨테이너를 1회용으로 띄워 명령 실행 — network none, read-only, cap-drop, pids/memory 제한, /challenge 마운트
     def run(
         self,
         *,
@@ -184,6 +187,7 @@ class DockerWorker:
                 truncated=True,
             )
 
+    # 출력을 max_output_bytes로 자르고 truncate 플래그 반환
     def _clip(self, value: str) -> tuple[str, bool]:
         encoded = value.encode("utf-8", errors="replace")
         if len(encoded) <= self.settings.max_output_bytes:

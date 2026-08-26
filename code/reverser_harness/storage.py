@@ -13,10 +13,12 @@ from typing import Any
 from .security import safe_filename, slug, validate_id
 
 
+# 현재 UTC 시간을 ISO8601(초 단위)로 반환 — progress.md의 생성/갱신 시각에 사용
 def utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+# 임시 파일에 쓴 뒤 os.replace로 원자적으로 교체 — 쓰기 중 크래시에도 파일 무결성 보장
 def atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -33,6 +35,7 @@ def atomic_write_text(path: Path, text: str) -> None:
             pass
 
 
+# JSON을 원자적으로 저장 (indent 포함)
 def atomic_write_json(path: Path, payload: Any) -> None:
     atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
@@ -46,6 +49,7 @@ def public_state(state: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# solve_started_at ~ finished_at(없으면 현재) 차이로 풀이 경과 초 계산 — 백그라운드 타이머 불필요
 def solve_elapsed_seconds(state: dict[str, Any]) -> int:
     """Return wall-clock solve time without requiring a background timer."""
     started = state.get("solve_started_at")
@@ -63,6 +67,7 @@ def solve_elapsed_seconds(state: dict[str, Any]) -> int:
     return max(0, int((ending - beginning).total_seconds()))
 
 
+# 파일을 1MB씩 나눠 읽어 SHA256 해시를 계산 — artifact 무결성 검증용
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -72,10 +77,12 @@ def sha256_file(path: Path) -> str:
 
 
 class ChallengeStore:
+    # runs 루트 경로를 받아 ChallengeStore를 초기화
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
+    # challenge_id로 실제 디렉터리 경로를 찾음 — rglob으로 runs/<event>/<id> 중첩과 레거시 flat 둘 다 지원, 없으면 flat 경로 반환
     def challenge_dir(self, challenge_id: str) -> Path:
         validate_id(challenge_id)
         direct = (self.root / challenge_id).resolve()
@@ -108,6 +115,7 @@ class ChallengeStore:
             raise ValueError("Challenge path escapes store")
         return direct
 
+    # 새 챌린지를 생성 — event가 있으면 runs/<slug(event)>/<id>에, 없으면 flat에 생성 후 progress.md 초기화
     def create(
         self,
         *,
@@ -152,6 +160,7 @@ class ChallengeStore:
         self.save(state)
         return state
 
+    # progress.md의 <!-- reverser-state --> 주석 안 JSON을 파싱해 상태를 로드
     def load(self, challenge_id: str) -> dict[str, Any]:
         path = self.challenge_dir(challenge_id) / "progress.md"
         try:
@@ -164,6 +173,7 @@ class ChallengeStore:
             raise FileNotFoundError(f"Invalid challenge state: {challenge_id}")
         return value
 
+    # 상태를 progress.md에 저장 — 상단에 чел린지 메타, 하단에 tool_runs 테이블, JSON은 주석에 보관
     def save(self, state: dict[str, Any]) -> None:
         state["updated_at"] = utc_now()
         tools = state.get("tool_runs", [])
@@ -203,6 +213,7 @@ class ChallengeStore:
             f"<!-- reverser-state\n{metadata}\n-->\n\n" + "\n".join(lines) + "\n",
         )
 
+    # rglob로 모든 progress.md를 찾아 최신순(updated_at)으로 정렬해 반환
     def list(self) -> list[dict[str, Any]]:
         items = []
         for path in self.root.rglob("progress.md"):
@@ -214,6 +225,7 @@ class ChallengeStore:
                 items.append(value)
         return sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)
 
+    # 원본 첨부 파일을 original/에 복사하고 artifact 목록에 등록 — 중복 시 -1, -2 접미사
     def add_original(self, state: dict[str, Any], source: Path, name: str | None = None) -> Path:
         source = source.resolve()
         if not source.is_file():
@@ -229,6 +241,7 @@ class ChallengeStore:
         self.register_artifact(state, destination, "original")
         return destination
 
+    # 파일을 artifact 목록에 등록 — 상대경로, 크기, SHA256 기록, 기존 동일 path는 덮어씀
     def register_artifact(
         self, state: dict[str, Any], path: Path, kind: str
     ) -> dict[str, Any]:
