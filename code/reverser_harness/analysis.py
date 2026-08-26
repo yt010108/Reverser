@@ -24,7 +24,7 @@ class Analyzer:
         result = self.worker.run(
             profile="core",
             challenge_dir=root,
-            command="ctf-triage /challenge/input /challenge/output/triage.json",
+            command="reverser-triage /challenge/input /challenge/output/triage.json",
             timeout_seconds=300,
         )
         triage_path = root / "output" / "triage.json"

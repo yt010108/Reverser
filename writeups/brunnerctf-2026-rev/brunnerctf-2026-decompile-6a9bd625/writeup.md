@@ -5,7 +5,7 @@
 - 각 문항의 정답 비교는 `main`에 하드코딩되어 있고, 마지막에 답을 조합해 플래그를 printf로 출력.
 
 ## 풀이
-1. Ghidra 디컴파일(`ctf-ghidra ... main ask wrong`)로 `main` 전체 확보. 정답은 모두 `main` 안:
+1. Ghidra 디컴파일(`reverser-ghidra ... main ask wrong`)로 `main` 전체 확보. 정답은 모두 `main` 안:
    - Q1 password: strcmp와 `"Pl4nt3xt_p455w0rd_1s_bu551ng"`
    - Q2 staplers: strtol != 0xfef → **4079**
    - Q3 asset tag: strtol != 0x2a → **0x2a**

@@ -1,12 +1,12 @@
 [project]
-name = "hermes-ctf-harness"
+name = "reverser"
 version = "0.1.0"
 description = "Pi-controlled isolated CTF reversing harness with time-gated research"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
-ctf-harness = "ctf_harness.cli:main"
+reverser = "reverser_harness.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "code"}

@@ -1,5 +1,5 @@
 // Headless post-script: decompile selected functions instead of the whole binary.
-// @category HermesCTF
+// @category Reverser
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;

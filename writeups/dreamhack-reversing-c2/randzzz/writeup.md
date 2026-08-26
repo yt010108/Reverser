@@ -38,4 +38,4 @@ Two ways, both verified:
 Both produce the same full flag.
 
 ## Flag
-Recorded via ctf_record_flag (64 hex chars inside DH{}). Not included in this public copy.
+Recorded via reverser_record_flag (64 hex chars inside DH{}). Not included in this public copy.

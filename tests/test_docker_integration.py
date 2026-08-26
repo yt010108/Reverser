@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ctf_harness.config import Settings
-from ctf_harness.docker_backend import DockerWorker
+from reverser_harness.config import Settings
+from reverser_harness.docker_backend import DockerWorker
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +34,7 @@ class DockerIntegrationTests(unittest.TestCase):
             result = worker.run(
                 profile="core",
                 challenge_dir=challenge,
-                command="ctf-triage /challenge/input /challenge/output/triage.json",
+                command="reverser-triage /challenge/input /challenge/output/triage.json",
                 timeout_seconds=120,
             )
             self.assertEqual(result.exit_code, 0, result.stderr)

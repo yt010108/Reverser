@@ -29,7 +29,7 @@ r=2→0 역순 적용. 서브키는 "SuP3RSaFeK3Y"를 `<6H`(LE) 언패킹.
 복호화 결과(플레인텍스트 + 후행 `\n\x00\x00\x00`)를 원본 바이너리로 재암호화 → `flag.enc`와 바이트 일치(`cmp` MATCH).
 
 ## 플래그
-(비공개 — `ctf_record_flag`에 기록됨)
+(비공개 — `reverser_record_flag`에 기록됨)
 
 ## 산출물
 - `output/ghidra.c` — 디컴파일

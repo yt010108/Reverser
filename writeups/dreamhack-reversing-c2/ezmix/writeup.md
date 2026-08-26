@@ -29,4 +29,4 @@ for o,p in reversed(ops):
 ```
 
 ## 결과
-플래그 획득 (36바이트, output.bin 길이와 일치). 값은 Git-ignored 상태에만 기록됨 (`ctf_record_flag`).
+플래그 획득 (36바이트, output.bin 길이와 일치). 값은 Git-ignored 상태에만 기록됨 (`reverser_record_flag`).

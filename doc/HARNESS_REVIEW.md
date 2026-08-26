@@ -1,7 +1,7 @@
-# Hermes CTF Reverse Harness 비교·개선 보고서
+# Reverser 비교·개선 보고서
 
 조사일: 2026-08-24  
-대상: 현재 `C:\Users\ytyt\Desktop\security\ctf`의 Pi 기반 리버싱 CTF 하네스
+대상: 현재 `C:\Users\ytyt\Desktop\security\Reverser`의 Pi 기반 리버싱 CTF 하네스
 
 ## 1. 결론부터
 
@@ -21,7 +21,7 @@
 현재 구현은 다음 흐름이다.
 
 1. 부모 Pi에서 문제를 가져오고 `runs/<challenge_id>/`에 저장한다.
-2. `ctf_solve`가 `--no-session`인 독립 Pi Solver를 실행한다.
+2. `reverser_solve`가 `--no-session`인 독립 Pi Solver를 실행한다.
 3. Solver는 `core → dynamic → 선택 함수만 ghidra → angr` 순서를 우선한다.
 4. 실제 바이너리 분석 명령은 명령마다 새 Docker 컨테이너에서 실행된다.
 5. 각 명령의 stdout/stderr와 명령 이력은 run 폴더와 `progress.md`에 남는다.
@@ -59,9 +59,9 @@
 ### 코드 수준에서 먼저 바로잡아야 할 점
 
 - 분석 명령 하나가 non-zero이면 전체 상태가 `failed`가 된다. CTF 분석에서 `grep` 결과 없음, 잘못된 함수 주소, 디버거 종료 같은 개별 실패는 정상적인 탐색 결과이므로 **명령 실패와 run 실패를 분리**해야 한다.
-- Solver가 exit code 0으로 끝났지만 상태가 `solving`인 경우, 현재 `ctf_solve`는 terminal state가 아닌데도 성공 결과를 반환할 수 있다.
+- Solver가 exit code 0으로 끝났지만 상태가 `solving`인 경우, 현재 `reverser_solve`는 terminal state가 아닌데도 성공 결과를 반환할 수 있다.
 - 반대로 Solver 프로세스가 실패해도 Reviewer가 성공하면 전체 실패 판단이 희석될 수 있다. Reviewer 성공은 Solver 실행 오류를 복구했다는 뜻이 아니다.
-- `ctf_record_flag`는 비어 있지 않은 임의 문자열을 받으면 즉시 `solved`로 바꾼다. Reviewer가 나중에 확인하더라도 이미 terminal state가 잘못 기록될 수 있다.
+- `reverser_record_flag`는 비어 있지 않은 임의 문자열을 받으면 즉시 `solved`로 바꾼다. Reviewer가 나중에 확인하더라도 이미 terminal state가 잘못 기록될 수 있다.
 - Docker 명령 timeout은 있지만 Pi Solver의 최대 턴, 최대 비용, 최대 전체 시간은 없다.
 
 ## 3. 비교 대상과 선정 기준
@@ -235,7 +235,7 @@ Muteki는 Claude, Codex, Cursor, Pi, OpenCode 등 여러 CLI agent를 같은 문
 
 #### P0-2. terminal state를 성공 조건으로 강제
 
-`ctf_solve` 완료 조건을 다음처럼 단순하게 만든다.
+`reverser_solve` 완료 조건을 다음처럼 단순하게 만든다.
 
 - `solved`: 성공
 - `unsolved`: 정상 종료지만 미해결
@@ -245,7 +245,7 @@ Muteki는 Claude, Codex, Cursor, Pi, OpenCode 등 여러 CLI agent를 같은 문
 
 #### P0-3. 플래그 provenance gate
 
-`ctf_record_flag(challenge_id, value, evidence_run)` 형태로 바꾸고 성공한 `evidence_run`의 stdout/stderr 원문에 같은 문자열이 있을 때만 `solved`로 전환한다. 조건을 통과하지 못한 후보는 저장하지 않는다.
+`reverser_record_flag(challenge_id, value, evidence_run)` 형태로 바꾸고 성공한 `evidence_run`의 stdout/stderr 원문에 같은 문자열이 있을 때만 `solved`로 전환한다. 조건을 통과하지 못한 후보는 저장하지 않는다.
 
 이 gate는 정답 자체를 검증하지 않고 값이 실행 결과에서 나왔다는 provenance만 확인한다. 더 일반적인 검증 계층은 추가하지 않는다.
 

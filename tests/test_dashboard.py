@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ctf_harness.dashboard import build_dashboard
-from ctf_harness.storage import ChallengeStore
+from reverser_harness.dashboard import build_dashboard
+from reverser_harness.storage import ChallengeStore
 
 
 class DashboardTests(unittest.TestCase):

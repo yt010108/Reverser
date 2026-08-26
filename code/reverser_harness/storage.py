@@ -156,7 +156,7 @@ class ChallengeStore:
         path = self.challenge_dir(challenge_id) / "progress.md"
         try:
             text = path.read_text(encoding="utf-8")
-            payload = text.split("<!-- ctf-state\n", 1)[1].split("\n-->", 1)[0]
+            payload = text.split("<!-- reverser-state\n", 1)[1].split("\n-->", 1)[0]
             value = json.loads(payload)
         except (OSError, IndexError, json.JSONDecodeError) as exc:
             raise FileNotFoundError(f"Unknown or invalid challenge: {challenge_id}") from exc
@@ -200,7 +200,7 @@ class ChallengeStore:
         metadata = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
         atomic_write_text(
             self.challenge_dir(str(state["challenge_id"])) / "progress.md",
-            f"<!-- ctf-state\n{metadata}\n-->\n\n" + "\n".join(lines) + "\n",
+            f"<!-- reverser-state\n{metadata}\n-->\n\n" + "\n".join(lines) + "\n",
         )
 
     def list(self) -> list[dict[str, Any]]:

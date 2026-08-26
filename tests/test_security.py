@@ -1,6 +1,6 @@
 import unittest
 
-from ctf_harness.security import SecurityError, contains_flag, redact_flags, safe_filename, validate_http_url
+from reverser_harness.security import SecurityError, contains_flag, redact_flags, safe_filename, validate_http_url
 
 
 class SecurityTests(unittest.TestCase):

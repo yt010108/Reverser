@@ -1,0 +1,31 @@
+{
+  "title": "L3ak CTF Omega",
+  "event": "L3akCTF 2026 rev",
+  "category": "reverse",
+  "architecture": "amd64",
+  "bits": 64,
+  "source_url": "",
+  "challenge_id": "l3ak-ctf-omega-a70a7e3f",
+  "attachments": [
+    {
+      "name": "echo.local.prx",
+      "size": 1552,
+      "sha256": "3ce0f76bbb9a9994497bc810faf95ec8879f32e6072798c5b9b3639945ed19a3"
+    },
+    {
+      "name": "echo.remote.prx",
+      "size": 1552,
+      "sha256": "38e3a4a0a55a802335da16907c49a5d2fd798c8527282d11452ee9cc8ed7a56d"
+    },
+    {
+      "name": "executor",
+      "size": 26760,
+      "sha256": "ab7bad24474190cf69ebd59db294f58cb57544cf793ab01b650ef379910a7ddf"
+    },
+    {
+      "name": "README.md",
+      "size": 561,
+      "sha256": "de15cef3bace5cab055222844bb720e8a43a0d310ced07c20517858d7a1f9fa9"
+    }
+  ]
+}

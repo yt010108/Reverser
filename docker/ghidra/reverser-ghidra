@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "usage: ctf-ghidra PROGRAM OUTPUT [FUNCTION_OR_ADDRESS ... | --all]" >&2
+  echo "usage: reverser-ghidra PROGRAM OUTPUT [FUNCTION_OR_ADDRESS ... | --all]" >&2
   exit 2
 fi
 
@@ -11,7 +11,7 @@ output="$2"
 shift 2
 
 project_dir=/challenge/work/ghidra-project
-project_name=ctf
+project_name=Reverser
 program_name="$(basename "$program")"
 program_sha="$(sha256sum "$program" | cut -d' ' -f1)"
 marker="$project_dir/.imported-$program_sha"

@@ -1,4 +1,4 @@
-"""Command-line interface for the Hermes CTF reversing harness."""
+"""Command-line interface for the Reverser."""
 
 import argparse
 import json
@@ -35,7 +35,7 @@ def visible(state: dict[str, Any], settings: Settings) -> dict[str, Any]:
 
 
 def parser() -> argparse.ArgumentParser:
-    result = argparse.ArgumentParser(prog="ctf-harness")
+    result = argparse.ArgumentParser(prog="reverser-harness")
     result.add_argument("--version", action="version", version=__version__)
     sub = result.add_subparsers(dest="action", required=True)
     sub.add_parser("doctor")

@@ -4,7 +4,7 @@
 - `runs/dreamhack-reversing-c1..c5/` — 드림핵 리버싱 클래스별
 - `runs/l3ak2026/` — L3ak 2026 아카이브 전부 (구 l3akctf-2026 6문제 포함,
   solved: subleq-scramble·what-who). `writeups/l3ak2026/`도 동일 구조.
-- 활성 진행 4문제(buzzword/drippy/omega/yet-another-chat)만 ctf_* 도구 접근을 위해
+- 활성 진행 4문제(buzzword/drippy/omega/yet-another-chat)만 reverser_* 도구 접근을 위해
   runs/ 최상위에 둠 — 완료 후 l3ak2026/로 이동
 - `writeups/`도 동일 구조 (공개용은 플래그 redacted)
 - 예전 문서 내 `runs/<id>/...` 경로는 `runs/<분류>/<id>/...`로 읽을 것
@@ -18,9 +18,9 @@
   역산 `input[i] = ((enc[i]-2i)&0xff) ^ i` → 입력 복원.
 - 플래그: DH{I_am_X0_xo_Xor_eXcit1ng} → runs/rev-basic-3-39f94b43/ 기록
 - Write-up: runs/rev-basic-3-39f94b43/reports/writeup.private.md (공개본은 writeups/rev-basic-3/)
-- 소요: 약 14분 (직접 해결, ctf_learn 불필요)
+- 소요: 약 14분 (직접 해결, reverser_learn 불필요)
 - 참고: Ghidra 헤드리스 postScript 실패(사유 미상) → r2로 대체해 해결.
-  ctf_exec 워커는 일회용이라 /tmp 상태가 호출 간 유지되지 않음(한 호출에 전부 수행할 것).
+  reverser_exec 워커는 일회용이라 /tmp 상태가 호출 간 유지되지 않음(한 호출에 전부 수행할 것).
   r2 출력은 cp949 인코딩 오류 가능 → `| iconv -c -f utf-8 -t ascii` 권장.
 
 ## 2026-08-24 — rev-basic-4 (Dreamhack Reversing C1) ✅ SOLVED
@@ -58,8 +58,8 @@
 rev-basic-5, rev-basic-6, rev-basic-7, rev-basic-8, Recover, r-xor-t, legacyopt
 
 ## 2026-08-24 — reversing-2/3/4 클래스 전체 공략 완료
-- 32개 문제 다운로드(runs/_staging/*.zip) → 임포트 → ctf_solve 위임 → 리뷰어 검수 완료.
-- 플래그는 모두 로컬(ctf_record_flag)만 기록, 사이트 미제출.
+- 32개 문제 다운로드(runs/_staging/*.zip) → 임포트 → reverser_solve 위임 → 리뷰어 검수 완료.
+- 플래그는 모두 로컬(reverser_record_flag)만 기록, 사이트 미제출.
 
 ### Reversing C2 — 8/8 solved
 ezmix(VM 역산), patch(GDI+ 선분→ASCII 렌더, KH{UPATCHEK}), Long Sleep(변조 SHA-256 재구현),
@@ -90,7 +90,7 @@ typing-game-goes-hard/carta/casino-777, boss-rush(C5). 로컬은 더미 플래�
 인스턴스에서 저장된 솔버를 돌려야 실제 플래그 획득. runs/<id>/work|reports 참조.
 
 ## 2026-08-24 — Reversing C5 공략 완료
-- 12문제 임포트 → ctf_solve 위임 → 리뷰어 검수. 플래그는 모두 로컬(ctf_record_flag)만 기록.
+- 12문제 임포트 → reverser_solve 위임 → 리뷰어 검수. 플래그는 모두 로컬(reverser_record_flag)만 기록.
 
 ### C5 최종: 9 solved(로컬 플래그) + 1 서버전용 + 2 미해결
 ✅ solved:
@@ -113,7 +113,7 @@ typing-game-goes-hard/carta/casino-777, boss-rush(C5). 로컬은 더미 플래�
 ❌ weird-forest(researching): 이모지 이진트리 인코딩 복호화. 시뮬레이터 모델은 참 k에서
   바이너리 출력과 100% 일치 확정. 단 XOR 키 k가 실행 환경마다 다름(워커별 상이) 확인 →
   1308토큰=195문자, P(자유도)68 / C(결정적)127. 빔서치 구현들은 샘플 exact 복원 관문
-  미통과로 무효. 핵심 기법 ctf_learn 저장 완료. 차기: 같은 워커에서 샘플 검증 후 적용,
+  미통과로 무효. 핵심 기법 reverser_learn 저장 완료. 차기: 같은 워커에서 샘플 검증 후 적용,
   C 127개 결정적 위치 활용 + 단어/플래그 경계 프루닝.
 
 ❌ captain-hook(unsolved): PE 난독화·LCG 키스트림 완전 복호화(dec.bin=실제 평문,

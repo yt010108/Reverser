@@ -1,5 +1,5 @@
 {
-  "name": "hermes-ctf-browser",
+  "name": "reverser-browser",
   "private": true,
   "devDependencies": {
     "playwright": "1.62.0"

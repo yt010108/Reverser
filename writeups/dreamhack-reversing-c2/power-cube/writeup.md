@@ -31,5 +31,5 @@ print('[FLAG REDACTED]' % hashlib.sha256(v.to_bytes(8, 'little')).hexdigest())
 - 실행 결과와 "10회 반복 세제곱 후 SHA256" 에뮬레이션 출력이 정확히 일치하는 것을 확인 → 알고리즘 해석 검증 완료.
 
 ## 결과
-- 플래그: `ctf_record_flag`로 기록 완료 (본 문서에는 미포함).
+- 플래그: `reverser_record_flag`로 기록 완료 (본 문서에는 미포함).
 - 상태: solved

@@ -1,6 +1,6 @@
 import unittest
 
-from ctf_harness.cli import parser
+from reverser_harness.cli import parser
 
 
 class CliTests(unittest.TestCase):

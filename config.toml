@@ -1,14 +1,14 @@
 [project]
-name = "Hermes CTF Reverse Harness"
+name = "Reverser"
 
 [solve]
 research_after_seconds = 1800
 
 [images]
-core = "local/hermes-ctf-reverse-core:0.1"
-dynamic = "local/hermes-ctf-reverse-dynamic:0.1"
-ghidra = "local/hermes-ctf-reverse-ghidra:0.1"
-angr = "local/hermes-ctf-reverse-angr:0.1"
+core = "local/reverser-core:0.1"
+dynamic = "local/reverser-dynamic:0.1"
+ghidra = "local/reverser-ghidra:0.1"
+angr = "local/reverser-angr:0.1"
 
 [limits]
 timeout_seconds = 900

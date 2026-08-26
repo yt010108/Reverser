@@ -43,5 +43,5 @@ p.communicate(' '.join(str(r[0]) for r in order) + '\n')
 Verified in the dynamic worker: binary prints `Bingo! Flag: ...` with the local test flag.
 
 ## Result
-Solved locally; candidate flag recorded via `ctf_record_flag` (server-side flag would be read
+Solved locally; candidate flag recorded via `reverser_record_flag` (server-side flag would be read
 from the remote `./flag`).

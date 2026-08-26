@@ -22,7 +22,7 @@
 
 ## 결과
 - flag_out 평문: `[FLAG REDACTED]`
-- 상태: solved (플래그는 ctf_record_flag로 로컬 기록만 함)
+- 상태: solved (플래그는 reverser_record_flag로 로컬 기록만 함)
 
 ## 검증 노트 (reviewer)
 flag_out 암호문 중 위치 13(A, idx 0), 15·37(D, idx 3), 29(+, idx 62)은 복구되지 않은

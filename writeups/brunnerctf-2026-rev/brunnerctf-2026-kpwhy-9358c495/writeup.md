@@ -25,5 +25,5 @@
 `solve.py`로 복구한 ID를 격리 워커에서 실행하여 "Productivity: 100%" 확인.
 
 ## 결과
-플래그는 상태 기록에만 저장됨(`ctf_record_flag`). 공개 write-up에는 미포함.
+플래그는 상태 기록에만 저장됨(`reverser_record_flag`). 공개 write-up에는 미포함.
 형식: `[FLAG REDACTED]`

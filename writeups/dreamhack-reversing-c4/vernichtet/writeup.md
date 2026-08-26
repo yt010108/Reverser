@@ -30,7 +30,7 @@
 
 ## 결과
 - answer.bin sha256: e309147b588c517bb4100064d6185e5430ebad23d83e601327c4907bb0232292
-- Flag: 기록됨 (`ctf_record_flag`, 공개 문서에는 미포함)
+- Flag: 기록됨 (`reverser_record_flag`, 공개 문서에는 미포함)
 - 최종 답안 격자 (row-major):
 
 ```
@@ -53,4 +53,4 @@
 
 ## 참고
 - gcc가 없는 core 프로필이라 솔버는 Python으로 작성 (충분한 속도).
-- ctf_exec는 매 실행마다 새 컨테이너라 /tmp 파일이 유지되지 않음 → 추출+솔브를 한 명령으로 합쳐야 했음.
+- reverser_exec는 매 실행마다 새 컨테이너라 /tmp 파일이 유지되지 않음 → 추출+솔브를 한 명령으로 합쳐야 했음.

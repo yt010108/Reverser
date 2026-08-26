@@ -42,4 +42,4 @@ for k in range(0,256,4):
 ```
 
 ## 플래그
-[FLAG REDACTED] — `ctf_record_flag`에 기록됨 (공개 write-up에는 미포함)
+[FLAG REDACTED] — `reverser_record_flag`에 기록됨 (공개 write-up에는 미포함)

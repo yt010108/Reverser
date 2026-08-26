@@ -46,7 +46,7 @@ class Settings:
             raise ConfigError("Invalid Docker image name")
         return cls(
             project_root=root,
-            project_name=str(project.get("name", "Hermes CTF Reverse Harness")),
+            project_name=str(project.get("name", "Reverser")),
             research_after_seconds=max(
                 60, min(86_400, int(solve.get("research_after_seconds", 1800)))
             ),

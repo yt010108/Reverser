@@ -37,7 +37,7 @@ solve4.py: 테이블/디스패치 그래프 추출(call 명령 주소 순 정렬
 검증: (1) 난수 상태 fwd(bwd(x))==x && bwd(fwd(x))==x, (2) fwd(inp)==target,
 (3) 실제 바이너리 통과.
 
-복원 입력(=플래그 내용): 64자리 hex 문자열 — `ctf_record_flag`에 저장됨
+복원 입력(=플래그 내용): 64자리 hex 문자열 — `reverser_record_flag`에 저장됨
 (공개 문서에는 미포함). 실제 바이너리에 입력 시
 "Yes, the flag is [FLAG REDACTED]" 출력으로 검증 완료.
 

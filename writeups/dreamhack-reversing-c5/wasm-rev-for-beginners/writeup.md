@@ -3,7 +3,7 @@
 - Event: Dreamhack Reversing C5
 - Category: reverse (WebAssembly / Rust wasm-bindgen)
 - Status: SOLVED
-- Flag candidate recorded via `ctf_record_flag` (value redacted here).
+- Flag candidate recorded via `reverser_record_flag` (value redacted here).
 
 ## Files
 

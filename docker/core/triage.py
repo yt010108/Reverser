@@ -75,7 +75,7 @@ def inspect(path: Path, root: Path) -> dict[str, object]:
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("usage: ctf-triage INPUT_DIR OUTPUT_JSON", file=sys.stderr)
+        print("usage: reverser-triage INPUT_DIR OUTPUT_JSON", file=sys.stderr)
         return 2
     root = Path(sys.argv[1]).resolve()
     output = Path(sys.argv[2]).resolve()

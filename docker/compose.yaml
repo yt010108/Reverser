@@ -1,24 +1,24 @@
-name: hermes-ctf-reverse
+name: reverser
 services:
   core:
-    image: local/hermes-ctf-reverse-core:0.1
+    image: local/reverser-core:0.1
     build:
       context: ./core
   dynamic:
-    image: local/hermes-ctf-reverse-dynamic:0.1
+    image: local/reverser-dynamic:0.1
     build:
       context: ./dynamic
       args:
-        CORE_IMAGE: local/hermes-ctf-reverse-core:0.1
+        CORE_IMAGE: local/reverser-core:0.1
   ghidra:
-    image: local/hermes-ctf-reverse-ghidra:0.1
+    image: local/reverser-ghidra:0.1
     build:
       context: ./ghidra
       args:
-        CORE_IMAGE: local/hermes-ctf-reverse-core:0.1
+        CORE_IMAGE: local/reverser-core:0.1
   angr:
-    image: local/hermes-ctf-reverse-angr:0.1
+    image: local/reverser-angr:0.1
     build:
       context: ./angr
       args:
-        CORE_IMAGE: local/hermes-ctf-reverse-core:0.1
+        CORE_IMAGE: local/reverser-core:0.1

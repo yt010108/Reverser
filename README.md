@@ -5,11 +5,11 @@ Pi와 네트워크 없는 Docker 작업자로 제공된 리버싱 CTF 문제를 
 ## 구조
 
 ```text
-ctf/
+Reverser/
 ├── AGENTS.md
 ├── README.md
-├── .pi/                 # /ctf와 ctf_* 도구
-├── code/ctf_harness/    # 가져오기, 분석, 저장, write-up, 메모리
+├── .pi/                 # /Reverser와 reverser_* 도구
+├── code/reverser_harness/    # 가져오기, 분석, 저장, write-up, 메모리
 ├── docker/              # core, dynamic, ghidra, angr 작업자
 ├── memory/techniques/   # 승인된 재사용 기법
 ├── tests/
@@ -22,7 +22,7 @@ ctf/
 ## 실행
 
 ```powershell
-cd C:\Users\ytyt\Desktop\security\ctf
+cd C:\Users\ytyt\Desktop\security\Reverser
 docker compose -f .\docker\compose.yaml build core dynamic
 pi
 ```
@@ -30,7 +30,7 @@ pi
 Pi에서:
 
 ```text
-/ctf
+/Reverser
 ```
 
 Pi는 문제 URL이나 로컬 파일을 받아 문제를 가져온 뒤, 풀이를 별도 Solver Pi에 위임한다. 플래그 제출과 작업자 네트워크는 없다.
@@ -60,7 +60,7 @@ $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1"
 npm install
 ```
 
-Pi의 `ctf_browser`에는 Playwright의 `page`와 `context`가 그대로 전달된다. 별도 브라우저 헬퍼는 없다.
+Pi의 `reverser_browser`에는 Playwright의 `page`와 `context`가 그대로 전달된다. 별도 브라우저 헬퍼는 없다.
 
 ```javascript
 await page.goto("https://ctf.example/challenges");
@@ -74,7 +74,7 @@ await page.getByRole("link", { name: "Reversing" }).click();
 return await page.locator("body").innerText();
 ```
 
-다운로드 파일은 `.private/browser-downloads/`에 저장하고 `ctf_import_local`로 가져온다.
+다운로드 파일은 `.private/browser-downloads/`에 저장하고 `reverser_import_local`로 가져온다.
 
 ```javascript
 const [download] = await Promise.all([
@@ -86,7 +86,7 @@ await download.saveAs(path);
 return path;
 ```
 
-반드시 `waitForEvent`와 클릭을 같이 기다린다. `ctf_browser`는 이렇게 `await`된 오류를 도구 오류로 반환한다.
+반드시 `waitForEvent`와 클릭을 같이 기다린다. `reverser_browser`는 이렇게 `await`된 오류를 도구 오류로 반환한다.
 
 ## 작업자
 
@@ -107,7 +107,7 @@ docker compose -f .\docker\compose.yaml build angr
 Ghidra는 매번 전체 함수를 디컴파일하지 않는다. 먼저 `core`의 radare2로 관심 함수나 주소를 좁힌 다음 Ghidra 작업자에서 다음과 같이 실행한다.
 
 ```bash
-ctf-ghidra /challenge/input/chall /challenge/output/decompile.c main check_flag 0x401230
+reverser-ghidra /challenge/input/chall /challenge/output/decompile.c main check_flag 0x401230
 ```
 
 첫 호출은 분석 프로젝트를 `/challenge/work/ghidra-project/`에 저장하고, 다음 호출부터는 분석을 다시 하지 않고 그 프로젝트를 재사용한다. 함수를 생략하면 `main`/entry 계열만 우선 출력하며, `--all`은 전체 함수가 필요할 때만 사용한다.
@@ -129,17 +129,17 @@ runs/<CHALLENGE_ID>/
 
 ```powershell
 $env:PYTHONPATH="$PWD\code"
-py -3 -m ctf_harness.cli doctor
-py -3 -m ctf_harness.cli import-local --title rev1 --file C:\Downloads\rev1
-py -3 -m ctf_harness.cli list
-py -3 -m ctf_harness.cli status CHALLENGE_ID
-py -3 -m ctf_harness.cli solution-search CHALLENGE_ID "xor validation loop"
-py -3 -m ctf_harness.cli dashboard
+py -3 -m reverser_harness.cli doctor
+py -3 -m reverser_harness.cli import-local --title rev1 --file C:\Downloads\rev1
+py -3 -m reverser_harness.cli list
+py -3 -m reverser_harness.cli status CHALLENGE_ID
+py -3 -m reverser_harness.cli solution-search CHALLENGE_ID "xor validation loop"
+py -3 -m reverser_harness.cli dashboard
 ```
 
 ## 대시보드
 
-`ctf_dashboard` 또는 `dashboard` 명령은 서버를 띄우지 않고 루트의 `dashboard.html` 하나를 생성한다. 이 파일에는 실제 플래그가 들어가지 않으며 Git에서도 제외된다.
+`reverser_dashboard` 또는 `dashboard` 명령은 서버를 띄우지 않고 루트의 `dashboard.html` 하나를 생성한다. 이 파일에는 실제 플래그가 들어가지 않으며 Git에서도 제외된다.
 
 ## 테스트
 

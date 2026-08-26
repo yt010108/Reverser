@@ -93,7 +93,7 @@ class DockerWorker:
             path.mkdir(parents=True, exist_ok=True)
 
         timeout = max(1, min(7200, timeout_seconds or self.settings.timeout_seconds))
-        name = f"hermes-ctf-{profile}-{uuid.uuid4().hex[:12]}"
+        name = f"reverser-{profile}-{uuid.uuid4().hex[:12]}"
         docker_command = [
             self.docker,
             "run",

@@ -54,7 +54,7 @@ Reverser는 범용 코딩 Agent를 하나 더 만들려는 프로젝트가 아�
 
 [Pi](https://pi.dev/)는 minimal agent harness를 지향한다. sub-agent, plan mode, MCP, permission popup 같은 기능을 코어에 전부 넣지 않고 필요하면 Extension으로 추가한다. 기본 Harness가 작으니 프로젝트에 필요하지 않은 기능을 걷어낼 필요도 없다.
 
-이 미니멀함이 Reverser에 더 적합했다. `.pi/extensions/ctf.ts`에서 CTF 전용 도구를 등록하고 Parent Pi, Solver, Reviewer의 역할을 직접 나눌 수 있다. 어떤 로그를 저장하고 언제 Solver를 끝내며 무엇을 Reviewer에 넘길지도 Reverser가 정한다.
+이 미니멀함이 Reverser에 더 적합했다. `.pi/extensions/Reverser.ts`에서 CTF 전용 도구를 등록하고 Parent Pi, Solver, Reviewer의 역할을 직접 나눌 수 있다. 어떤 로그를 저장하고 언제 Solver를 끝내며 무엇을 Reviewer에 넘길지도 Reverser가 정한다.
 
 결국 Pi를 선택한 이유는 가벼워서만은 아니다. 이미 완성된 범용 Workflow를 사용하는 것보다 작은 Harness 위에서 가설과 검증, 상태 저장, 피드백 루프를 직접 설계하기 쉬웠기 때문이다.
 
@@ -119,7 +119,7 @@ Solver가 더 진행하기 어렵다고 판단하거나 30분을 넘기면 새�
 역할을 나눈 다음에는 Pi의 판단을 Python Harness와 연결해야 했다. Pi와 프로젝트를 잇는 파일은 아래 Extension이다.
 
 ```text
-.pi/extensions/ctf.ts
+.pi/extensions/Reverser.ts
 ```
 
 이 Extension이 Pi에 CTF 전용 도구를 등록한다.
@@ -141,7 +141,7 @@ Pi가 분석 명령을 요청하더라도 곧바로 Docker 명령을 조합하�
 ```text
 Pi
   ↓
-ctf_exec
+reverser_exec
   ↓
 Python CLI
   ↓

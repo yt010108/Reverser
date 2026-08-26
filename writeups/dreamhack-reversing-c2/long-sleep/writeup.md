@@ -30,7 +30,7 @@
 4. `"I will evolve into SUPER FLAG!!!!"`의 다이제스트를 hex 인코딩한 것이 플래그 본문.
 
 ## 결과
-플래그는 로컬에만 기록(`ctf_record_flag` 완료). 형식: `[FLAG REDACTED]`.
+플래그는 로컬에만 기록(`reverser_record_flag` 완료). 형식: `[FLAG REDACTED]`.
 
 ## 산출물
 - runs/long-sleep-6ec393f3/work/writeup.md (본 문서)

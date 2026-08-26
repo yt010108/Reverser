@@ -4,14 +4,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ctf_harness.config import Settings
-from ctf_harness.docker_backend import DockerWorker
+from reverser_harness.config import Settings
+from reverser_harness.docker_backend import DockerWorker
 
 
 class DockerBackendTests(unittest.TestCase):
     def test_ghidra_wrapper_reuses_project_and_limits_default_export(self):
         root = Path(__file__).resolve().parents[1]
-        wrapper = (root / "docker" / "ghidra" / "ctf-ghidra").read_text(encoding="utf-8")
+        wrapper = (root / "docker" / "ghidra" / "reverser-ghidra").read_text(encoding="utf-8")
         script = (root / "docker" / "ghidra" / "ExportDecompile.java").read_text(encoding="utf-8")
 
         self.assertIn('-process "$program_name" -noanalysis', wrapper)
@@ -48,7 +48,7 @@ search_limit=5
             def fake_run(command, **kwargs):
                 calls.append(command)
                 return subprocess.CompletedProcess(command, 0, "ok", "")
-            with patch("ctf_harness.docker_backend.shutil.which", return_value="docker"), patch("ctf_harness.docker_backend.subprocess.run", side_effect=fake_run):
+            with patch("reverser_harness.docker_backend.shutil.which", return_value="docker"), patch("reverser_harness.docker_backend.subprocess.run", side_effect=fake_run):
                 worker = DockerWorker(Settings.load(root))
                 worker.run(profile="core", challenge_dir=challenge, command="file /challenge/input/a")
                 core = calls[-1]

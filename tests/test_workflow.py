@@ -3,13 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ctf_harness.analysis import Analyzer
-from ctf_harness.config import Settings
-from ctf_harness.docker_backend import CommandResult
-from ctf_harness.importer import ChallengeImporter
-from ctf_harness.memory import MemoryError, TechniqueMemory
-from ctf_harness.storage import ChallengeStore, public_state
-from ctf_harness.writeup import WriteupManager
+from reverser_harness.analysis import Analyzer
+from reverser_harness.config import Settings
+from reverser_harness.docker_backend import CommandResult
+from reverser_harness.importer import ChallengeImporter
+from reverser_harness.memory import MemoryError, TechniqueMemory
+from reverser_harness.storage import ChallengeStore, public_state
+from reverser_harness.writeup import WriteupManager
 
 
 CONFIG = """
