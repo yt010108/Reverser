@@ -245,6 +245,8 @@ function result(value: CliResult) {
 }
 
 export default function (pi: ExtensionAPI) {
+  let solverTerminal: string | undefined;
+
   pi.on("session_shutdown", async () => {
     const context = browserContext;
     browserContext = undefined;
@@ -256,7 +258,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|terminate|learn)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|terminate|learn)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 reverser_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -330,52 +332,41 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, _p, signal, _onUpdate, _ctx) { return result(await runCli(["dashboard"], signal)); },
   });
   pi.registerTool({
-    name: "reverser_solve", label: "CTF: 풀이 오케스트레이션", description: "Solve one imported challenge in an isolated Pi context, then automatically run a fresh reviewer only when unsolved or research-due.",
+    name: "reverser_solve", label: "CTF: Solver 터미널", description: "Open a Solver Pi in a separate Orca terminal and return immediately so the parent remains interactive.",
     parameters: Type.Object({ challenge_id: Type.String() }),
-    async execute(_id, p, signal, onUpdate, ctx) {
+    async execute(_id, p, signal, _onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
-      const initialState = current.parsed as { title?: string } | undefined;
-      const solver = await runPiAgent("solver", p.challenge_id, initialState?.title, signal, onUpdate, ctx);
-      const after = await runCli(["status", p.challenge_id], signal);
-      const state = after.parsed as { status?: string; research_due?: boolean } | undefined;
-      const reviewable = state?.status === "unsolved" || state?.research_due === true;
-      const reviewer = after.exitCode === 0 && reviewable
-        ? await runPiAgent("reviewer", p.challenge_id, initialState?.title, signal, onUpdate, ctx)
-        : undefined;
-      let finalCheck = reviewer
-        ? await runCli(["status", p.challenge_id], signal)
-        : after;
-      let finalState = finalCheck.parsed as { status?: string } | undefined;
-      const agentFailed = solver.exitCode !== 0 || (reviewer?.exitCode ?? 0) !== 0;
-      if (agentFailed) {
-        await runCli(["terminate", p.challenge_id, "--reason", "agent_process_error"], signal);
-        finalCheck = await runCli(["status", p.challenge_id], signal);
-        finalState = finalCheck.parsed as { status?: string } | undefined;
-      } else if (!new Set(["solved", "unsolved", "failed"]).has(finalState?.status ?? "")) {
-        await runCli(["terminate", p.challenge_id, "--reason", "agent_exited_without_terminal_state"], signal);
-        finalCheck = await runCli(["status", p.challenge_id], signal);
-        finalState = finalCheck.parsed as { status?: string } | undefined;
+      const args = [
+        "pi", "-p", "--no-session", "--approve",
+        "--tools", AGENT_TOOLS.solver.join(","),
+        "--append-system-prompt", ".pi/agents/solver.md",
+      ];
+      if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);
+      if (ctx.thinkingLevel) args.push("--thinking", ctx.thinkingLevel);
+      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}`));
+      const splitArgs = ["terminal", "split"];
+      if (solverTerminal) splitArgs.push("--terminal", solverTerminal);
+      splitArgs.push("--direction", solverTerminal ? "horizontal" : "vertical", "--json");
+      const orca = process.platform === "win32" ? "orca.exe" : "orca";
+      let split = await pi.exec(orca, splitArgs, { signal });
+      if (split.code !== 0 && solverTerminal) {
+        solverTerminal = undefined;
+        split = await pi.exec(orca, ["terminal", "split", "--direction", "vertical", "--json"], { signal });
       }
-      const solverText = solver.finalText || solver.stderr || "출력 없음";
-      const sections = [`## Solver\n${solverText.slice(0, 4_000)}${solverText.length > 4_000 ? "\n[이후 요약 생략]" : ""}`];
-      if (reviewer) {
-        const reviewerText = reviewer.finalText || reviewer.stderr || "출력 없음";
-        sections.push(`## Reviewer\n${reviewerText.slice(0, 4_000)}${reviewerText.length > 4_000 ? "\n[이후 요약 생략]" : ""}`);
-      }
-      else sections.push("## Reviewer\n조건이 되지 않아 실행하지 않음.");
-      const outcome = finalState?.status ?? "failed";
-      sections.push(`## Outcome\n${outcome}`);
-      const failed = agentFailed || finalCheck.exitCode !== 0 || outcome === "failed";
+      if (split.code !== 0) return { content: [{ type: "text" as const, text: split.stderr || split.stdout }], details: {}, isError: true };
+      let handle: string | undefined;
+      try { handle = (JSON.parse(split.stdout) as { result?: { split?: { handle?: string } } }).result?.split?.handle; } catch {}
+      if (!handle) return { content: [{ type: "text" as const, text: "Orca terminal handle을 받지 못했습니다." }], details: {}, isError: true };
+      const sent = await pi.exec(orca, [
+        "terminal", "send", "--terminal", handle,
+        "--text", args.join(" "), "--enter", "--json",
+      ], { signal });
+      if (sent.code !== 0) return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
+      solverTerminal = handle;
       return {
-        content: [{ type: "text" as const, text: sections.join("\n\n") }],
-        details: {
-          challengeId: p.challenge_id,
-          outcome,
-          solver: { exitCode: solver.exitCode, turns: solver.turns, model: solver.model },
-          reviewer: reviewer ? { exitCode: reviewer.exitCode, turns: reviewer.turns, model: reviewer.model } : null,
-        },
-        isError: failed,
+        content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
+        details: { challengeId: p.challenge_id, terminal: handle },
       };
     },
   });

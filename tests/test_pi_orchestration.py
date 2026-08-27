@@ -16,27 +16,24 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('pi.on("session_shutdown"', extension)
         self.assertIn("await context.close().catch", extension)
 
-    def test_solver_and_reviewer_use_ephemeral_child_pi(self):
+    def test_solver_uses_orca_terminal_and_reviewer_uses_ephemeral_pi(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
 
         self.assertIn('name: "reverser_solve"', extension)
         self.assertIn('name: "reverser_review"', extension)
         self.assertIn('"--mode", "json", "-p", "--no-session", "--approve"', extension)
         self.assertIn('"--tools", AGENT_TOOLS[role].join(",")', extension)
-        self.assertIn('state?.status === "unsolved"', extension)
-        self.assertIn("state?.research_due === true", extension)
         self.assertIn('runPiAgent("reviewer"', extension)
-        self.assertIn("const agentFailed = solver.exitCode !== 0", extension)
-        self.assertIn('"agent_exited_without_terminal_state"', extension)
         solve_block = extension.split('name: "reverser_solve"', 1)[1].split(
             'name: "reverser_review"', 1
         )[0]
-        self.assertIn(
-            'const reviewable = state?.status === "unsolved" || state?.research_due === true;',
-            solve_block,
-        )
-        self.assertNotIn('const reviewable = state?.status === "solved"', solve_block)
-        self.assertIn("slice(0, 4_000)", extension)
+        self.assertIn('splitArgs.push("--direction", solverTerminal ? "horizontal" : "vertical"', solve_block)
+        self.assertIn('if (split.code !== 0 && solverTerminal)', solve_block)
+        self.assertIn('solverTerminal = undefined', solve_block)
+        self.assertIn('"terminal", "send", "--terminal", handle', solve_block)
+        self.assertIn("await pi.exec", solve_block)
+        self.assertIn('AGENT_TOOLS.solver.join(",")', solve_block)
+        self.assertNotIn('await runPiAgent("solver"', solve_block)
         self.assertIn('event.type === "tool_execution_start"', extension)
         self.assertIn('event.type === "tool_execution_end"', extension)
         self.assertIn("elapsedText", extension)
@@ -55,6 +52,10 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertTrue((ROOT / ".pi" / "agents" / "solver.md").is_file())
         self.assertTrue((ROOT / ".pi" / "agents" / "reviewer.md").is_file())
 
+    def test_parent_cannot_bypass_solver_layout_with_raw_orca_split(self):
+        extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
+        self.assertIn(r"orca(?:\.exe)?\s+terminal\s+(?:split|create)", extension)
+
     def test_flag_tool_requires_evidence_and_solution_search_is_local_only(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
         self.assertIn("evidence_run: Type.Integer", extension)
@@ -68,7 +69,6 @@ class PiOrchestrationTests(unittest.TestCase):
             extension,
         )
         self.assertIn('text: `[${roleLabel} · ${challengeLabel}] ${status}`', extension)
-        self.assertIn("initialState?.title", extension)
         self.assertIn("state?.title", extension)
         self.assertIn('publish("에이전트 시작")', extension)
         self.assertIn('publish(`에이전트 ${code === 0 ? "완료" : "종료"}', extension)
