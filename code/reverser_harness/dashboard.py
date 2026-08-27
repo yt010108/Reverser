@@ -6,8 +6,8 @@ from pathlib import Path
 from .storage import ChallengeStore
 
 
-# store.list()를 테이블로 렌더링해 dashboard.html을 생성 — 플래그는 개수만 노출, 값은 숨김
-def build_dashboard(project_root: Path, store: ChallengeStore) -> Path:
+# store.list()를 테이블로 렌더링해 dashboard.html을 생성
+def build_dashboard(store: ChallengeStore) -> Path:
     rows = []
     for item in store.list():
         rows.append(
@@ -27,6 +27,6 @@ def build_dashboard(project_root: Path, store: ChallengeStore) -> Path:
 <h1>CTF Reverse</h1><p>로컬 읽기 전용 요약</p>
 <table><thead><tr><th>문제</th><th>상태</th><th>아키텍처</th><th>플래그 후보</th><th>ID</th></tr></thead><tbody>{body}</tbody></table>
 </html>"""
-    destination = project_root / "dashboard.html"
+    destination = store.root / "dashboard.html"
     destination.write_text(html, encoding="utf-8", newline="\n")
     return destination

@@ -72,6 +72,8 @@ class Analyzer:
             raise AnalysisError("Run triage before free-form analysis")
         hypotheses = state.get("hypotheses", [])
         active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        if state.get("recon") and not hypotheses:
+            raise AnalysisError("Propose a flag hypothesis before further analysis")
         if hypotheses and not active:
             raise AnalysisError("Propose the next hypothesis before running analysis")
         if active and active.get("id") != hypothesis_id:
@@ -118,6 +120,9 @@ class Analyzer:
             raise AnalysisError("Flag not found in evidence run")
         if value not in state["flags"]:
             state["flags"].append(value)
+        state.setdefault("flag_evidence", [])[:] = [
+            item for item in state.get("flag_evidence", []) if item.get("flag") != value
+        ] + [{"flag": value, "evidence_run": evidence_run}]
         state["status"] = "solved"
         state["solved_at"] = state.get("solved_at") or utc_now()
         state["finished_at"] = state.get("finished_at") or state["solved_at"]

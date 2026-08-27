@@ -15,13 +15,7 @@ let browserContext: BrowserContext | undefined;
 let browserPage: Page | undefined;
 
 type AgentRole = "solver" | "reviewer";
-type AgentRun = {
-  exitCode: number;
-  finalText: string;
-  stderr: string;
-  turns: number;
-  model?: string;
-};
+type AgentContext = { model?: { provider: string; id: string }; thinkingLevel?: string };
 
 // Child agents get only the harness tools needed for their role. In particular,
 // they cannot open another browser or recursively dispatch more agents.
@@ -29,171 +23,24 @@ const AGENT_TOOLS: Record<AgentRole, string[]> = {
   solver: [
     "read", "write", "edit", "grep", "find", "ls",
     "reverser_status", "reverser_triage", "reverser_exec", "reverser_record_flag",
-    "reverser_hypothesis", "reverser_writeup", "reverser_solution_search", "reverser_mark_unsolved", "reverser_learn",
+    "reverser_recon", "reverser_hypothesis", "reverser_solution_search", "reverser_mark_unsolved",
   ],
   reviewer: [
-    "read", "write", "edit", "grep", "find", "ls",
-    "reverser_status", "reverser_exec", "reverser_record_flag", "reverser_writeup",
-    "reverser_solution_search", "reverser_mark_unsolved", "reverser_learn",
+    "read", "write", "grep", "find", "ls", "reverser_status", "reverser_writeup",
+    "reverser_solution_search", "reverser_learn",
   ],
 };
 
-function elapsedText(milliseconds: number) {
-  const seconds = Math.max(0, milliseconds / 1_000);
-  if (seconds < 60) return `${seconds.toFixed(1)}초`;
-  return `${Math.floor(seconds / 60)}분 ${Math.floor(seconds % 60)}초`;
-}
-
-function describeAgentTool(toolName: string, args: unknown) {
-  const input = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
-  if (toolName === "reverser_exec") {
-    const command = typeof input.command === "string" ? input.command : "";
-    let action = "분석 명령";
-    if (/\b(?:r2|radare2|rabin2)\b/i.test(command)) action = "radare2 정적 분석";
-    else if (/\breverser-ghidra\b|\bghidra(?:-headless)?\b/i.test(command)) action = "Ghidra 관심 함수 디컴파일";
-    else if (/\b(?:gdb|gdbserver)\b/i.test(command)) action = "GDB 동적 분석";
-    else if (/\b(?:strace|ltrace|frida)\b/i.test(command)) action = "런타임 추적";
-    else if (/\bangr\b/i.test(command)) action = "angr 심볼릭 실행";
-    else if (/\bstrings\b/i.test(command)) action = "문자열 분석";
-    else if (/\b(?:file|checksec|readelf|objdump|nm)\b/i.test(command)) action = "바이너리 구조 확인";
-    else if (/\bpython3?\b/i.test(command)) action = "Python 검증 스크립트";
-    return `${typeof input.profile === "string" ? input.profile : "worker"} · ${action}`;
-  }
-  const path = String(input.path ?? input.file_path ?? "파일")
-    .replaceAll("\\", "/").split("/").slice(-2).join("/");
-  switch (toolName) {
-    case "reverser_triage": return "core · 정적 triage";
-    case "reverser_status": return "문제 상태 확인";
-    case "reverser_hypothesis": return "가설 상태 갱신";
-    case "reverser_record_flag": return "플래그 후보 로컬 기록";
-    case "reverser_writeup": return "Write-up 저장";
-    case "reverser_solution_search": return "로컬 풀이 방법 검색";
-    case "reverser_mark_unsolved": return "미해결 사유 기록";
-    case "reverser_learn": return "재사용 기법 저장";
-    case "read": return `아티팩트 읽기 · ${path}`;
-    case "write": return `결과 작성 · ${path}`;
-    case "edit": return `결과 수정 · ${path}`;
-    case "grep": return "아티팩트 패턴 검색";
-    case "find": return "아티팩트 파일 탐색";
-    case "ls": return "아티팩트 목록 확인";
-    default: return toolName;
-  }
-}
-
-function runPiAgent(
-  role: AgentRole,
-  challengeId: string,
-  challengeTitle: string | undefined,
-  signal: AbortSignal | undefined,
-  onUpdate: ((value: any) => void) | undefined,
-  context: { model?: { provider: string; id: string }; thinkingLevel?: string },
-): Promise<AgentRun> {
-  const prompt = resolve(projectRoot, ".pi", "agents", `${role}.md`);
+function agentCommand(role: AgentRole, challengeId: string, context: AgentContext) {
   const args = [
-    "--mode", "json", "-p", "--no-session", "--approve",
+    "pi", "-p", "--no-session", "--approve",
     "--tools", AGENT_TOOLS[role].join(","),
-    "--append-system-prompt", prompt,
+    "--append-system-prompt", `.pi/agents/${role}.md`,
   ];
-  const model = context.model ? `${context.model.provider}/${context.model.id}` : undefined;
-  if (model) args.push("--model", model);
+  if (context.model) args.push("--model", `${context.model.provider}/${context.model.id}`);
   if (context.thinkingLevel) args.push("--thinking", context.thinkingLevel);
-  args.push(`CTF challenge_id: ${challengeId}`);
-
-  const cli = process.argv[1];
-  const command = cli ? process.execPath : process.platform === "win32" ? "pi.cmd" : "pi";
-  const childArgs = cli ? [cli, ...args] : args;
-  return new Promise<AgentRun>((resolvePromise, reject) => {
-    const child = spawn(command, childArgs, {
-      cwd: projectRoot,
-      env: process.env,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let buffer = "";
-    let stderr = "";
-    let finalText = "";
-    let turns = 0;
-    let childModel = model;
-    const agentStartedAt = Date.now();
-    let running: { description: string; startedAt: number } | undefined;
-    const roleLabel = role === "solver" ? "Solver" : "Reviewer";
-    const title = challengeTitle?.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 80);
-    const challengeLabel = title ? `${title} (${challengeId})` : challengeId;
-
-    const publish = (status: string) => onUpdate?.({
-      content: [{ type: "text", text: `[${roleLabel} · ${challengeLabel}] ${status}` }],
-      details: { role, challengeId, turns, model: childModel },
-    });
-    const consume = (line: string) => {
-      if (!line.trim()) return;
-      try {
-        const event = JSON.parse(line) as {
-          type?: string;
-          message?: unknown;
-          toolName?: string;
-          args?: unknown;
-          isError?: boolean;
-          result?: unknown;
-        };
-        if (event.type === "tool_execution_start" && event.toolName) {
-          const description = describeAgentTool(event.toolName, event.args);
-          running = { description, startedAt: Date.now() };
-          publish(`${description} · 실행 중`);
-          return;
-        }
-        if (event.type === "tool_execution_end") {
-          const description = running?.description ?? describeAgentTool(event.toolName ?? "tool", event.args);
-          const elapsed = elapsedText(Date.now() - (running?.startedAt ?? Date.now()));
-          const exitCode = (event.result as { details?: { data?: { exit_code?: number } } } | undefined)?.details?.data?.exit_code;
-          const failed = event.isError || (typeof exitCode === "number" && exitCode !== 0);
-          running = undefined;
-          publish(`${description} · ${failed ? "실패" : "완료"} · ${elapsed}`);
-          return;
-        }
-        if (event.type !== "message_end" || !event.message) return;
-        const message = event.message as { role?: string; model?: string; content?: Array<{ type?: string; text?: string }> };
-        if (message.role !== "assistant") return;
-        turns += 1;
-        childModel = childModel ?? message.model;
-        const parts = Array.isArray(message.content) ? message.content : [];
-        const text = parts.filter((part) => part.type === "text" && part.text).map((part) => part.text).join("\n").trim();
-        if (text) finalText = text;
-        if (!parts.some((part) => part.type === "toolCall")) publish(`${text ? "풀이 정리 중" : "추론 중"} · ${turns}턴`);
-      } catch {
-        // JSON mode can still emit non-event diagnostics; stderr captures errors.
-      }
-    };
-    const heartbeat = setInterval(() => {
-      if (running) publish(`${running.description} · 실행 중 · ${elapsedText(Date.now() - running.startedAt)}`);
-    }, 10_000);
-    publish("에이전트 시작");
-    const abort = () => child.kill();
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) abort();
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      buffer += chunk;
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) consume(line);
-    });
-    child.stderr.on("data", (chunk: string) => {
-      if (stderr.length < 16_384) stderr += chunk;
-    });
-    child.on("error", (error) => {
-      clearInterval(heartbeat);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearInterval(heartbeat);
-      signal?.removeEventListener("abort", abort);
-      consume(buffer);
-      publish(`에이전트 ${code === 0 ? "완료" : "종료"} · ${elapsedText(Date.now() - agentStartedAt)}`);
-      resolvePromise({ exitCode: code ?? 1, finalText, stderr: stderr.trim(), turns, model: childModel });
-    });
-  });
+  args.push(JSON.stringify(`CTF challenge_id: ${challengeId}`));
+  return args.join(" ");
 }
 
 async function playwrightPage() {
@@ -246,36 +93,75 @@ function result(value: CliResult) {
 }
 
 export default function (pi: ExtensionAPI) {
+  const orca = process.platform === "win32" ? "orca.exe" : "orca";
   let solverTerminal: string | undefined;
   let plannerModel: { provider: string; id: string } | undefined;
   let plannerThinking: ReturnType<typeof pi.getThinkingLevel> | undefined;
-  const solverWatchers = new Map<string, FSWatcher>();
+  const jobWatchers = new Map<string, FSWatcher>();
 
-  const watchSolver = (challengeId: string, path: string) => {
+  const watchJob = (
+    role: AgentRole,
+    challengeId: string,
+    path: string,
+    onDone?: (job: { terminal?: string; result?: string }) => void,
+  ) => {
+    const key = `${role}:${challengeId}`;
     let notified = false;
     const notify = () => {
       try {
-        const job = JSON.parse(readFileSync(path, "utf8")) as { status?: string; result?: string };
+        const job = JSON.parse(readFileSync(path, "utf8")) as { status?: string; terminal?: string; result?: string };
         if (job.status !== "done" || notified) return;
         notified = true;
-        solverWatchers.get(challengeId)?.close();
-        solverWatchers.delete(challengeId);
+        jobWatchers.get(key)?.close();
+        jobWatchers.delete(key);
+        const label = role === "solver" ? "Solver" : "Reviewer";
         pi.sendMessage(
-          { customType: "solver", content: `[Solver] ${challengeId} 완료 · ${job.result}`, display: true },
+          { customType: role, content: `[${label}] ${challengeId} 완료 · ${job.result}`, display: true },
           { triggerTurn: true, deliverAs: "followUp" },
         );
+        onDone?.(job);
       } catch {}
     };
-    solverWatchers.get(challengeId)?.close();
-    solverWatchers.set(challengeId, watch(dirname(path), (_event, file) => {
-      if (file?.toString() === "solver.json") notify();
+    jobWatchers.get(key)?.close();
+    jobWatchers.set(key, watch(dirname(path), (_event, file) => {
+      if (file?.toString() === `${role}.json`) notify();
     }));
     notify();
   };
 
+  const launchReviewer = async (challengeId: string, terminal: string, context: AgentContext) => {
+    const idle = await pi.exec(orca, ["terminal", "wait", "--terminal", terminal, "--for", "tui-idle", "--timeout-ms", "60000", "--json"]);
+    if (idle.code !== 0) {
+      pi.sendMessage({ customType: "reviewer", content: `[Reviewer] ${challengeId} 시작 실패`, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+      return;
+    }
+    const tracked = await runCli(["reviewer-start", challengeId, "--terminal", terminal]);
+    if (tracked.exitCode !== 0) {
+      pi.sendMessage({ customType: "reviewer", content: `[Reviewer] ${challengeId} 시작 실패`, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+      return;
+    }
+    const path = (tracked.parsed as { path?: string } | undefined)?.path;
+    if (!path) return;
+    watchJob("reviewer", challengeId, path);
+    const sent = await pi.exec(orca, ["terminal", "send", "--terminal", terminal, "--text", agentCommand("reviewer", challengeId, context), "--enter", "--json"]);
+    if (sent.code !== 0) await runCli(["reviewer-finish", challengeId, "--failed"]);
+  };
+
+  const openTerminal = async (base: string | undefined, signal?: AbortSignal) => {
+    const args = ["terminal", "split"];
+    if (base) args.push("--terminal", base);
+    args.push("--direction", base ? "horizontal" : "vertical", "--json");
+    let split = await pi.exec(orca, args, { signal });
+    if (split.code !== 0 && base) split = await pi.exec(orca, ["terminal", "split", "--direction", "vertical", "--json"], { signal });
+    if (split.code !== 0) throw new Error(split.stderr || split.stdout);
+    const handle = (JSON.parse(split.stdout) as { result?: { split?: { handle?: string } } }).result?.split?.handle;
+    if (!handle) throw new Error("Orca terminal handle을 받지 못했습니다.");
+    return handle;
+  };
+
   pi.on("session_shutdown", async () => {
-    for (const watcher of solverWatchers.values()) watcher.close();
-    solverWatchers.clear();
+    for (const watcher of jobWatchers.values()) watcher.close();
+    jobWatchers.clear();
     const context = browserContext;
     browserContext = undefined;
     browserPage = undefined;
@@ -286,7 +172,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|hypothesis|unsolved|terminate|learn|solver-start|solver-finish)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|recon|hypothesis|unsolved|terminate|learn|solver-start|solver-finish|reviewer-start|reviewer-finish)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 reverser_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -309,7 +195,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerTool({
-    name: "reverser_list", label: "CTF: 문제 목록", description: "List locally imported challenges without exposing stored flag values.", parameters: Type.Object({}),
+    name: "reverser_list", label: "CTF: 로컬 목록", description: "Return a compact JSON catalog of the local project, events, and challenges.", parameters: Type.Object({}),
     async execute(_id, _p, signal, _onUpdate, _ctx) { return result(await runCli(["list"], signal)); },
   });
   pi.registerTool({
@@ -336,10 +222,28 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerTool({
+    name: "reverser_recon", label: "CTF: 초기 정찰", description: "Record entry-point analysis and flag-related targets before forming a hypothesis.",
+    parameters: Type.Object({
+      challenge_id: Type.String(), entry_point: Type.String(), main: Type.Optional(Type.String()),
+      evidence_runs: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
+      flag_candidates: Type.Array(Type.Object({
+        target: Type.String(), reason: Type.String(),
+        evidence_runs: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
+      }), { minItems: 1 }),
+    }),
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const args = ["recon", p.challenge_id, "--entry-point", p.entry_point, "--candidates-json", JSON.stringify(p.flag_candidates)];
+      if (p.main) args.push("--main", p.main);
+      for (const run of p.evidence_runs) args.push("--evidence-run", String(run));
+      return result(await runCli(args, signal));
+    },
+  });
+  pi.registerTool({
     name: "reverser_hypothesis", label: "CTF: 가설", description: "Propose one falsifiable hypothesis or resolve the active hypothesis with a linked verification run.",
     parameters: Type.Object({
       challenge_id: Type.String(), action: Type.Union([Type.Literal("propose"), Type.Literal("resolve")]),
-      hypothesis_id: Type.Optional(Type.String()), claim: Type.Optional(Type.String()), test: Type.Optional(Type.String()),
+      hypothesis_id: Type.Optional(Type.String()), target: Type.Optional(Type.String()), parent_id: Type.Optional(Type.String()),
+      claim: Type.Optional(Type.String()), test: Type.Optional(Type.String()),
       falsifier: Type.Optional(Type.String()), exhaustion: Type.Optional(Type.String()),
       outcome: Type.Optional(Type.Union([Type.Literal("confirmed"), Type.Literal("rejected"), Type.Literal("inconclusive")])),
       evidence_run: Type.Optional(Type.Integer({ minimum: 1 })), observation: Type.Optional(Type.String()),
@@ -347,7 +251,8 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, _onUpdate, ctx) {
       const args = ["hypothesis", p.challenge_id, p.action];
       for (const [flag, value] of [
-        ["--hypothesis-id", p.hypothesis_id], ["--claim", p.claim], ["--test", p.test],
+        ["--hypothesis-id", p.hypothesis_id], ["--target", p.target], ["--parent-id", p.parent_id],
+        ["--claim", p.claim], ["--test", p.test],
         ["--falsifier", p.falsifier], ["--exhaustion", p.exhaustion], ["--outcome", p.outcome],
         ["--observation", p.observation],
       ] as Array<[string, string | undefined]>) if (value) args.push(flag, value);
@@ -375,16 +280,20 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerTool({
-    name: "reverser_record_flag", label: "CTF: 플래그 로컬 기록", description: "Require the candidate to appear in one successful tool run, then store it locally without submitting or echoing it.",
+    name: "reverser_record_flag", label: "CTF: 플래그 로컬 기록", description: "Store a flag only when it appears in a successful evidence run, then finish the Solver.",
     parameters: Type.Object({ challenge_id: Type.String(), value: Type.String(), evidence_run: Type.Integer({ minimum: 1 }) }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run)], signal)); },
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const saved = await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run)], signal);
+      if (saved.exitCode === 0) await runCli(["solver-finish", p.challenge_id], signal);
+      return result(saved);
+    },
   });
   pi.registerTool({
-    name: "reverser_writeup", label: "CTF: Write-up 저장", description: "Save an exact private write-up and a Git-safe public copy with known and flag-shaped values redacted.",
+    name: "reverser_writeup", label: "CTF: Reviewer 결과 저장", description: "Save the Reviewer output only inside the ignored challenge workspace.",
     parameters: Type.Object({ challenge_id: Type.String(), file: Type.String() }),
     async execute(_id, p, signal, _onUpdate, _ctx) {
       const saved = await runCli(["writeup", p.challenge_id, "--file", p.file], signal);
-      if (saved.exitCode === 0) await runCli(["solver-finish", p.challenge_id], signal);
+      if (saved.exitCode === 0) await runCli(["reviewer-finish", p.challenge_id], signal);
       return result(saved);
     },
   });
@@ -408,7 +317,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["learn", p.challenge_id, "--file", p.file], signal)); },
   });
   pi.registerTool({
-    name: "reverser_dashboard", label: "CTF: 대시보드", description: "Generate one local read-only dashboard.html file.", parameters: Type.Object({}),
+    name: "reverser_dashboard", label: "CTF: 대시보드", description: "Generate runs/dashboard.html.", parameters: Type.Object({}),
     async execute(_id, _p, signal, _onUpdate, _ctx) { return result(await runCli(["dashboard"], signal)); },
   });
   pi.registerTool({
@@ -417,30 +326,11 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, p, signal, _onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
-      const args = [
-        "pi", "-p", "--no-session", "--approve",
-        "--tools", AGENT_TOOLS.solver.join(","),
-        "--append-system-prompt", ".pi/agents/solver.md",
-      ];
-      if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);
-      if (ctx.thinkingLevel) args.push("--thinking", ctx.thinkingLevel);
-      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}`));
-      const splitArgs = ["terminal", "split"];
-      if (solverTerminal) splitArgs.push("--terminal", solverTerminal);
-      splitArgs.push("--direction", solverTerminal ? "horizontal" : "vertical", "--json");
-      const orca = process.platform === "win32" ? "orca.exe" : "orca";
-      let split = await pi.exec(orca, splitArgs, { signal });
-      if (split.code !== 0 && solverTerminal) {
-        solverTerminal = undefined;
-        split = await pi.exec(orca, ["terminal", "split", "--direction", "vertical", "--json"], { signal });
-      }
-      if (split.code !== 0) return { content: [{ type: "text" as const, text: split.stderr || split.stdout }], details: {}, isError: true };
-      let handle: string | undefined;
-      try { handle = (JSON.parse(split.stdout) as { result?: { split?: { handle?: string } } }).result?.split?.handle; } catch {}
-      if (!handle) return { content: [{ type: "text" as const, text: "Orca terminal handle을 받지 못했습니다." }], details: {}, isError: true };
+      const context: AgentContext = { model: ctx.model, thinkingLevel: ctx.thinkingLevel };
+      const handle = await openTerminal(solverTerminal, signal);
       const sent = await pi.exec(orca, [
         "terminal", "send", "--terminal", handle,
-        "--text", args.join(" "), "--enter", "--json",
+        "--text", agentCommand("solver", p.challenge_id, context), "--enter", "--json",
       ], { signal });
       if (sent.code !== 0) return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
       solverTerminal = handle;
@@ -448,7 +338,9 @@ export default function (pi: ExtensionAPI) {
       if (tracked.exitCode !== 0) return result(tracked);
       const path = (tracked.parsed as { path?: string } | undefined)?.path;
       if (!path) return { content: [{ type: "text" as const, text: "solver.json 경로를 받지 못했습니다." }], details: { handle }, isError: true };
-      watchSolver(p.challenge_id, path);
+      watchJob("solver", p.challenge_id, path, (job) => {
+        if (job.terminal) void launchReviewer(p.challenge_id, job.terminal, context);
+      });
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
         details: { challengeId: p.challenge_id, terminal: handle },
@@ -456,28 +348,23 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerTool({
-    name: "reverser_review", label: "CTF: 독립 Reviewer", description: "Review a solved, unsolved, or research-due challenge in a fresh Pi context. Active attempts under 30 minutes are skipped.",
+    name: "reverser_review", label: "CTF: 독립 Reviewer", description: "Start a post-solve Reviewer in Orca and return immediately.",
     parameters: Type.Object({ challenge_id: Type.String() }),
-    async execute(_id, p, signal, onUpdate, ctx) {
+    async execute(_id, p, signal, _onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
-      const state = current.parsed as { title?: string; status?: string; research_due?: boolean } | undefined;
-      const reviewable = state?.status === "solved" || state?.status === "unsolved" || state?.research_due === true;
-      if (!reviewable) {
+      const state = current.parsed as { status?: string } | undefined;
+      if (!state || !["solved", "unsolved", "failed"].includes(state.status ?? "")) {
         return {
-          content: [{ type: "text" as const, text: "Reviewer 조건이 아닙니다: 풀이 30분 이내의 활성 문제입니다." }],
+          content: [{ type: "text" as const, text: "Reviewer는 Solver가 종료된 문제만 검토합니다." }],
           details: { role: "reviewer", challengeId: p.challenge_id, skipped: true },
         };
       }
-      const reviewer = await runPiAgent("reviewer", p.challenge_id, state?.title, signal, onUpdate, ctx);
-      const failed = reviewer.exitCode !== 0;
-      const text = failed
-        ? `reviewer 실행 실패 (exit ${reviewer.exitCode})\n${reviewer.stderr || reviewer.finalText || "출력 없음"}`
-        : reviewer.finalText || "reviewer 완료";
+      const handle = await openTerminal(solverTerminal, signal);
+      void launchReviewer(p.challenge_id, handle, { model: ctx.model, thinkingLevel: ctx.thinkingLevel });
       return {
-        content: [{ type: "text" as const, text }],
-        details: { role: "reviewer", challengeId: p.challenge_id, exitCode: reviewer.exitCode, turns: reviewer.turns, model: reviewer.model },
-        isError: failed,
+        content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Reviewer를 시작했습니다." }],
+        details: { role: "reviewer", challengeId: p.challenge_id, terminal: handle },
       };
     },
   });
