@@ -1,5 +1,7 @@
 """문제 파일과 progress.md 하나로 상태를 보존한다."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -41,10 +43,8 @@ def atomic_write_json(path: Path, payload: Any) -> None:
 
 
 def public_state(state: dict[str, Any]) -> dict[str, Any]:
-    """화면과 CLI에는 실제 플래그 값을 내보내지 않는다."""
-    private_keys = {"flags"}
-    result = {key: value for key, value in state.items() if key not in private_keys}
-    result["flag_candidates"] = len(state.get("flags", []))
+    """Add local-only derived fields to challenge state."""
+    result = dict(state)
     result["elapsed_seconds"] = solve_elapsed_seconds(state)
     return result
 
@@ -153,9 +153,12 @@ class ChallengeStore:
             "blocker": "",
             "exit_reason": None,
             "flags": [],
+            "flag_evidence": [],
             "artifacts": [],
             "tool_runs": [],
             "solution_searches": [],
+            "recon": None,
+            "hypotheses": [],
         }
         self.save(state)
         return state
@@ -177,6 +180,7 @@ class ChallengeStore:
     def save(self, state: dict[str, Any]) -> None:
         state["updated_at"] = utc_now()
         tools = state.get("tool_runs", [])
+        clean = lambda value: str(value).replace("\r", " ").replace("\n", " ").strip()
         lines = [
             f"# CTF progress: {state['title']}",
             "",
@@ -188,6 +192,48 @@ class ChallengeStore:
             f"- Research started: `{state.get('research_started_at') or '-'}`",
             f"- Updated: `{state['updated_at']}`",
         ]
+        hypotheses = state.get("hypotheses", [])
+        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        phase = "verify" if active else "hypothesize" if state.get("recon") else "recon"
+        lines.extend(["", "## Solver", "", f"- Phase: `{phase}`"])
+        recon = state.get("recon")
+        if recon:
+            lines.extend([
+                "", "## Recon", "",
+                f"- Entry point: {clean(recon.get('entry_point', ''))}",
+                f"- Main: {clean(recon.get('main') or '-')}",
+                f"- Evidence: {', '.join(map(str, recon.get('evidence_runs', []))) or '-'}",
+                "- Flag candidates:",
+            ])
+            for candidate in recon.get("flag_candidates", []):
+                runs = ", ".join(map(str, candidate.get("evidence_runs", []))) or "-"
+                lines.append(f"  - `{clean(candidate.get('target', '-'))}` — {clean(candidate.get('reason', ''))} (runs: {runs})")
+        if active:
+            lines.extend([
+                "", "## Current hypothesis", "", f"### {clean(active.get('id', '-'))}",
+                f"- Target: {clean(active.get('target', ''))}",
+                f"- Parent: {clean(active.get('parent_id') or '-')}",
+                f"- Claim: {clean(active.get('claim', ''))}",
+                f"- Test: {clean(active.get('test', ''))}",
+                f"- Falsifier: {clean(active.get('falsifier', ''))}",
+                f"- Exhaustion: {clean(active.get('exhaustion', ''))}",
+                f"- Evidence: {', '.join(map(str, active.get('evidence_runs', []))) or '-'}",
+                "- Status: `testing`",
+            ])
+        if hypotheses:
+            lines.extend(["", "## Hypothesis tree", ""])
+            children: dict[str | None, list[dict[str, Any]]] = {}
+            for item in hypotheses:
+                children.setdefault(item.get("parent_id"), []).append(item)
+
+            def append_hypothesis(item: dict[str, Any], depth: int) -> None:
+                runs = ", ".join(map(str, item.get("evidence_runs", []))) or "-"
+                lines.append(f"{'  ' * depth}- `{clean(item.get('id', '-'))}` `{clean(item.get('status', '-'))}` `{clean(item.get('target', '-'))}` — {clean(item.get('claim', ''))} — {clean(item.get('observation', ''))} (runs: {runs})")
+                for child in children.get(item.get("id"), []):
+                    append_hypothesis(child, depth + 1)
+
+            for root in children.get(None, []):
+                append_hypothesis(root, 0)
         if state.get("blocker"):
             lines.extend(["", "## Blocker", "", str(state["blocker"])])
         searches = state.get("solution_searches", [])
@@ -224,6 +270,157 @@ class ChallengeStore:
             if isinstance(value, dict):
                 items.append(value)
         return sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)
+
+    def start_solver(self, challenge_id: str, terminal: str) -> dict[str, Any]:
+        self.load(challenge_id)
+        path = self.challenge_dir(challenge_id) / "solver.json"
+        value = {"challenge_id": challenge_id, "status": "running", "terminal": terminal, "result": None}
+        atomic_write_json(path, value)
+        return {**value, "path": str(path)}
+
+    def finish_solver(self, challenge_id: str) -> dict[str, Any]:
+        result = str(self.load(challenge_id).get("status", ""))
+        if result not in {"solved", "unsolved", "failed"}:
+            raise RuntimeError("Solver must record a terminal challenge state before finishing")
+        path = self.challenge_dir(challenge_id) / "solver.json"
+        try:
+            terminal = str(json.loads(path.read_text(encoding="utf-8")).get("terminal", ""))
+        except (OSError, json.JSONDecodeError):
+            terminal = ""
+        value = {"challenge_id": challenge_id, "status": "done", "terminal": terminal, "result": result}
+        atomic_write_json(path, value)
+        return {**value, "path": str(path)}
+
+    def start_reviewer(self, challenge_id: str, terminal: str) -> dict[str, Any]:
+        self.load(challenge_id)
+        path = self.challenge_dir(challenge_id) / "reviewer.json"
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("status") == "running":
+                raise RuntimeError("Reviewer is already running")
+        except (OSError, json.JSONDecodeError):
+            pass
+        value = {"challenge_id": challenge_id, "status": "running", "terminal": terminal, "result": None}
+        atomic_write_json(path, value)
+        return {**value, "path": str(path)}
+
+    def finish_reviewer(self, challenge_id: str, failed: bool = False) -> dict[str, Any]:
+        state = self.load(challenge_id)
+        report = "writeup.md" if state.get("status") == "solved" else "review.md"
+        if not failed and not (self.challenge_dir(challenge_id) / "reports" / report).is_file():
+            raise RuntimeError("Reviewer must save its report before finishing")
+        path = self.challenge_dir(challenge_id) / "reviewer.json"
+        try:
+            terminal = str(json.loads(path.read_text(encoding="utf-8")).get("terminal", ""))
+        except (OSError, json.JSONDecodeError):
+            terminal = ""
+        value = {"challenge_id": challenge_id, "status": "done", "terminal": terminal, "result": "failed" if failed else report}
+        atomic_write_json(path, value)
+        return {**value, "path": str(path)}
+
+    def update_recon(
+        self,
+        challenge_id: str,
+        *,
+        entry_point: str,
+        main: str = "",
+        evidence_runs: list[int],
+        flag_candidates: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        state = self.load(challenge_id)
+        if state.get("status") not in {"solving", "researching"}:
+            raise RuntimeError("Run triage before recording recon")
+        if any(item.get("status") == "testing" for item in state.get("hypotheses", [])):
+            raise RuntimeError("Resolve the active hypothesis before updating recon")
+        if not entry_point.strip() or len(entry_point) > 500 or len(main) > 500:
+            raise ValueError("entry_point is required")
+        runs = {item.get("sequence"): item for item in state.get("tool_runs", [])}
+        if not evidence_runs or any(run not in runs or runs[run].get("exit_code") != 0 for run in evidence_runs):
+            raise RuntimeError("Recon requires successful evidence runs")
+        if not any(runs[run].get("profile") != "triage" for run in evidence_runs):
+            raise RuntimeError("Inspect the entry point before recording recon")
+        candidates = []
+        for candidate in flag_candidates:
+            if not isinstance(candidate, dict):
+                raise ValueError("Each flag candidate must be an object")
+            target = str(candidate.get("target", "")).strip()
+            reason = str(candidate.get("reason", "")).strip()
+            candidate_runs = candidate.get("evidence_runs", [])
+            if not target or not reason or len(target) > 500 or len(reason) > 1000:
+                raise ValueError("Each flag candidate requires target and reason")
+            if not candidate_runs or any(run not in runs or runs[run].get("exit_code") != 0 for run in candidate_runs):
+                raise RuntimeError("Flag candidates require successful evidence runs")
+            candidates.append({"target": target, "reason": reason, "evidence_runs": list(dict.fromkeys(candidate_runs))})
+        if not candidates:
+            raise ValueError("At least one flag candidate is required")
+        targets = {item["target"] for item in candidates}
+        if any(item.get("target") not in targets for item in state.get("hypotheses", [])):
+            raise RuntimeError("Recon must retain targets used by existing hypotheses")
+        state["recon"] = {
+            "entry_point": entry_point.strip(), "main": main.strip(),
+            "evidence_runs": list(dict.fromkeys(evidence_runs)), "flag_candidates": candidates,
+        }
+        self.save(state)
+        return state["recon"]
+
+    def update_hypothesis(
+        self,
+        challenge_id: str,
+        action: str,
+        *,
+        hypothesis_id: str = "",
+        target: str = "",
+        parent_id: str = "",
+        claim: str = "",
+        test: str = "",
+        falsifier: str = "",
+        exhaustion: str = "",
+        outcome: str = "",
+        evidence_run: int | None = None,
+        observation: str = "",
+    ) -> dict[str, Any]:
+        state = self.load(challenge_id)
+        hypotheses = state.setdefault("hypotheses", [])
+        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        if action == "propose":
+            if state.get("status") not in {"solving", "researching"}:
+                raise RuntimeError("Run triage before proposing a hypothesis")
+            recon = state.get("recon")
+            if not recon:
+                raise RuntimeError("Record entry-point recon before proposing a hypothesis")
+            if active:
+                raise RuntimeError("Resolve the active hypothesis before proposing another")
+            target = target.strip()
+            if target not in {item.get("target") for item in recon.get("flag_candidates", [])}:
+                raise RuntimeError("Hypothesis target must be a recon flag candidate")
+            parent = next((item for item in hypotheses if item.get("id") == parent_id), None) if parent_id else None
+            if parent_id and not parent:
+                raise RuntimeError("Unknown parent hypothesis")
+            if parent and (parent.get("status") == "rejected" or parent.get("target") != target):
+                raise RuntimeError("A child requires a non-rejected parent with the same target")
+            values = [claim.strip(), test.strip(), falsifier.strip(), exhaustion.strip()]
+            if any(not value or len(value) > 1000 for value in values):
+                raise ValueError("claim, test, falsifier, and exhaustion are required")
+            active = {
+                "id": f"h{len(hypotheses) + 1}", "target": target, "parent_id": parent_id or None,
+                "claim": values[0], "test": values[1],
+                "falsifier": values[2], "exhaustion": values[3], "status": "testing", "evidence_runs": [],
+            }
+            hypotheses.append(active)
+        elif action == "resolve":
+            if not active or active.get("id") != hypothesis_id:
+                raise RuntimeError("Unknown active hypothesis")
+            if outcome not in {"confirmed", "rejected", "inconclusive"} or evidence_run is None or not observation.strip():
+                raise ValueError("outcome, evidence_run, and observation are required")
+            runs = [item for item in state.get("tool_runs", []) if item.get("hypothesis_id") == hypothesis_id]
+            if evidence_run not in {item.get("sequence") for item in runs}:
+                raise RuntimeError("Evidence run does not belong to the active hypothesis")
+            active["status"] = outcome
+            active["observation"] = observation.strip()
+            active["evidence_runs"] = [item["sequence"] for item in runs]
+        else:
+            raise ValueError("Unknown hypothesis action")
+        self.save(state)
+        return {"phase": "verify" if action == "propose" else "hypothesize", "hypothesis": active}
 
     # 원본 첨부 파일을 original/에 복사하고 artifact 목록에 등록 — 중복 시 -1, -2 접미사
     def add_original(self, state: dict[str, Any], source: Path, name: str | None = None) -> Path:

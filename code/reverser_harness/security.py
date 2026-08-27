@@ -1,4 +1,4 @@
-"""Input validation and tracked-output sanitization."""
+"""Input validation helpers."""
 
 import re
 from pathlib import Path
@@ -45,15 +45,6 @@ def safe_filename(value: str, fallback: str = "attachment.bin") -> str:
     name = Path(value.replace("\\", "/")).name
     name = re.sub(r"[^a-zA-Z0-9._()+@ -]+", "_", name).strip(" .")
     return name[:180] or fallback
-
-
-# 텍스트에서 알려진 플래그와 FLAG 패턴을 [FLAG REDACTED]로 치환 — 공개 writeup용
-def redact_flags(text: str, known_flags: list[str] | None = None) -> str:
-    result = text
-    for flag in sorted(set(known_flags or []), key=len, reverse=True):
-        if flag:
-            result = result.replace(flag, "[FLAG REDACTED]")
-    return _FLAG.sub("[FLAG REDACTED]", result)
 
 
 # 텍스트에 FLAG 패턴이 포함되어 있는지 검사

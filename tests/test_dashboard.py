@@ -16,8 +16,9 @@ class DashboardTests(unittest.TestCase):
             state["flags"] = [flag]
             store.save(state)
 
-            dashboard = build_dashboard(root, store)
+            dashboard = build_dashboard(store)
             text = dashboard.read_text(encoding="utf-8")
+            self.assertEqual(dashboard.parent, store.root)
             self.assertIn("Dashboard", text)
             self.assertIn("1", text)
             self.assertNotIn(flag, text)

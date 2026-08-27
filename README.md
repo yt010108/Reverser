@@ -13,8 +13,7 @@ Reverser/
 ├── docker/              # core, dynamic, ghidra, angr 작업자
 ├── memory/techniques/   # 승인된 재사용 기법
 ├── tests/
-├── writeups/            # 플래그가 제거된 공개 write-up
-└── runs/<CHALLENGE_ID>/ # 원본과 분석 결과, Git 제외
+└── runs/[EVENT/]<CHALLENGE_ID>/ # 원본과 분석 결과, Git 제외
 ```
 
 전체 `ctf-skills` 저장소는 복사하지 않는다. 필요한 흐름은 로컬 Pi 스킬에만 두며 참고 원본은 [ljagiello/ctf-skills](https://github.com/ljagiello/ctf-skills)다.
@@ -33,23 +32,52 @@ Pi에서:
 /Reverser
 ```
 
-Pi는 문제 URL이나 로컬 파일을 받아 문제를 가져온 뒤, 풀이를 별도 Solver Pi에 위임한다. 플래그 제출과 작업자 네트워크는 없다.
+Parent Pi는 문제 URL이나 로컬 파일을 가져온 뒤 풀이를 별도 Solver Pi에 위임하고 즉시 다시 명령을 받는다. 플래그 제출과 작업자 네트워크는 없다. 확장 코드를 바꿘으면 실행 중인 Pi에서 `/reload`로 다시 읽는다.
 
 ```text
-부모: 가져오기 → Solver: triage·풀이·Write-up → Reviewer: 검증·개선 피드백
+Parent: 가져오기 → Orca Solver: entry 정찰 → flag 후보 → 가설 트리 → 검증 → flag 저장
+                 ← [Solver] 완료
+                 → Orca Reviewer: 근거 검토 → Write-up
+                 ← [Reviewer] 완료
 ```
 
-Solver와 Reviewer는 각각 별도 Pi 프로세스에서 실행되므로 부모 Pi에 긴 풀이 컨텍스트가 누적되지 않는다. 현재 모델과 thinking 설정을 상속하고, 대화 세션은 저장하지 않으며 진행 상태와 결과는 `runs/<CHALLENGE_ID>/`에만 남긴다.
+`reverser_solve`는 현재 모델과 thinking을 상속한 Solver Pi를 Orca 서브 터미널에서 시작하며 종료를 기다리지 않는다. 첫 Solver는 Parent 오른쪽에, 추가 Solver는 오른쪽 아래로 쌓인다. 마지막 터미널이 닫혔으면 Parent 기준 분할을 한 번 재시도한다.
 
-Pi TUI는 자식의 사고 과정이나 명령 출력 전문을 가져오지 않고 작업 종류와 경과시간만 보여준다. 10초 이상 실행되는 작업은 진행 시간을 주기적으로 갱신한다.
+Solver의 긴 풀이 컨텍스트와 출력은 Parent에 들어오지 않는다. 플래그와 근거 run을 저장하고 종료하면 같은 Orca 터미널에서 새 컨텍스트의 Reviewer가 자동으로 시작된다. Parent에는 각 단계의 완료 메시지만 전달된다.
 
 ```text
-[Solver] core · radare2 정적 분석 · 실행 중 · 18.2초
-[Solver] ghidra · Ghidra 관심 함수 디컴파일 · 완료 · 26.9초
-[Reviewer] Write-up 저장 · 완료 · 0.4초
+[Solver] CHALLENGE_ID 완료 · solved
+[Reviewer] CHALLENGE_ID 완료 · writeup.md
 ```
 
-30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. Solver 종료 후 미해결·30분 초과 문제만 새 Reviewer가 검토한다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
+### Solver 가설 루프
+
+Solver는 가설 없이 entry point에서 main 계열 함수까지 먼저 분석하고, 입력·비교·성공 경로에서 flag 검증 또는 생성 후보를 `recon`에 기록한다. 이후 후보 하나를 target으로 골라 한 번에 하나의 가설만 검증한다. 가설에는 주장, 검사 방법, 반증 조건, 유한한 검사 범위를 기록한다. 가설을 세운 모델과 검증 모델을 교체하며, 검증 모델은 확장에서 교체할 수 있다. 현재 기본값은 Luna다.
+
+가설은 `parent_id`로 트리를 이룬다. 확인되거나 불확실한 가설을 구체화할 때는 child, 대안은 sibling으로 두며 rejected 노드 아래에는 child를 만들 수 없다. 검증 명령은 활성 `hypothesis_id`를 포함해야 하고, 결과는 `confirmed`, `rejected`, `inconclusive` 중 하나와 실제 run 근거로 마감한다.
+
+`progress.md`에 recon, flag 후보, 가설 트리와 검증 run을 저장해 사용자가 바로 확인할 수 있다. Solver의 파일 도구는 `reverser_status`가 반환한 `workspace`만 보도록 프롬프트에서 제한한다. 이는 행동 지침이며 강제 샌드박스는 아니다.
+
+30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. Reviewer는 풀이 중에 개입하지 않고 `solved`, `unsolved`, `failed` 후에만 실행된다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
+
+### Solver 완료 알림
+
+Solver를 시작하면 문제 폴더의 `solver.json`을 다음처럼 기록한다.
+
+```json
+{
+  "challenge_id": "CHALLENGE_ID",
+  "status": "running",
+  "terminal": "ORCA_TERMINAL_ID",
+  "result": null
+}
+```
+
+플래그 저장이나 미해결 기록이 끝나면 `solver.json`을 `done`으로 바꾼다. Reviewer도 같은 형식의 `reviewer.json`을 사용한다. Parent는 두 JSON을 `fs.watch`로 감시하므로 주기적인 조회를 하지 않는다.
+
+### 로컬 목록
+
+`reverser_list`는 Parent가 바로 읽을 수 있게 `project`, `events`, `challenges`를 하나의 JSON 객체로 반환한다.
 
 ## Playwright 브라우저
 
@@ -115,15 +143,17 @@ reverser-ghidra /challenge/input/chall /challenge/output/decompile.c main check_
 ## 문제 결과
 
 ```text
-runs/<CHALLENGE_ID>/
+runs/[EVENT/]<CHALLENGE_ID>/
 ├── progress.md
+├── solver.json
+├── reviewer.json
 ├── original/
 ├── work/
 ├── output/
 └── reports/
 ```
 
-`progress.md`에 `solving`, `researching`, `solved`, `unsolved`, `failed` 상태와 경과시간, 실행 기록을 함께 저장한다. 실제 플래그와 비공개 write-up은 `runs/`에만 남고, 플래그를 제거한 결과만 `writeups/`에 저장한다.
+event가 있으면 문제는 `runs/<EVENT>/<CHALLENGE_ID>/`, 없으면 `runs/<CHALLENGE_ID>/`에 저장한다. 실제 플래그, 실행 로그, 가설 이력, Reviewer Write-up을 포함한 모든 문제 결과는 Git에서 제외된 `runs/`에만 남는다.
 
 ## 직접 CLI
 
@@ -133,13 +163,17 @@ py -3 -m reverser_harness.cli doctor
 py -3 -m reverser_harness.cli import-local --title rev1 --file C:\Downloads\rev1
 py -3 -m reverser_harness.cli list
 py -3 -m reverser_harness.cli status CHALLENGE_ID
+py -3 -m reverser_harness.cli recon CHALLENGE_ID --entry-point "0x401000" --main "0x401120" --evidence-run 2 --candidates-json '[{"target":"check_flag","reason":"success 경로 직전 호출","evidence_runs":[2]}]'
+py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID propose --target "check_flag" --claim "..." --test "..." --falsifier "..." --exhaustion "..."
+py -3 -m reverser_harness.cli exec CHALLENGE_ID --profile core --command "..." --hypothesis h1
+py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID resolve --hypothesis-id h1 --outcome rejected --evidence-run 1 --observation "..."
 py -3 -m reverser_harness.cli solution-search CHALLENGE_ID "xor validation loop"
 py -3 -m reverser_harness.cli dashboard
 ```
 
 ## 대시보드
 
-`reverser_dashboard` 또는 `dashboard` 명령은 서버를 띄우지 않고 루트의 `dashboard.html` 하나를 생성한다. 이 파일에는 실제 플래그가 들어가지 않으며 Git에서도 제외된다.
+`reverser_dashboard` 또는 `dashboard` 명령은 서버를 띄우지 않고 `runs/dashboard.html`을 생성한다.
 
 ## 테스트
 

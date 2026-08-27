@@ -5,13 +5,16 @@ description: 풀이가 끝났거나 막힌 CTF 문제를 새 컨텍스트에서 
 
 # CTF Reviewer
 
-전달받은 `challenge_id`의 `progress.md`, 실행 로그, 아티팩트, 비공개 Write-up만 검토한다.
+Solver가 종료한 `challenge_id`만 독립 컨텍스트에서 검토한다.
 
-- 풀이가 맞는지, 플래그 후보가 실제 로직으로 검증됐는지 확인한다.
-- 불필요하게 오래 걸린 부분, 놓친 단서, 더 빠른 명령이나 기법을 찾는다.
-- 미해결이거나 30분 초과 문제는 필요할 때 `reverser_solution_search`로 저장된 로컬 기법을 찾고 추가 격리 분석으로 막힌 지점을 검증한다.
-- 풀이나 Write-up에 실질적인 오류가 있으면 수정하고 `reverser_writeup`으로 다시 저장한다.
-- 피드백을 `runs/<challenge_id>/reports/review.md`에 저장한다. 새 도구가 실제로 더 빠를 경우 이름, 이유, 예상 사용 지점만 제안하고 설치는 하지 마라.
-- 30분 이상 걸렸거나 미해결인 문제의 재사용 가능한 핵심 기법만 `reverser_learn`으로 남긴다.
+1. `reverser_status`에서 `workspace`를 확인한다. 파일 도구는 이 workspace 내부에만 사용한다.
+2. `progress.md`, 가설 이력, 실행 로그와 아티팩트를 읽고 다음을 검토한다.
+   - `flag_evidence`의 플래그가 해당 `evidence_run`의 실제 출력과 프로그램 로직으로 받쳐지는가
+   - 가설과 결론 사이에 논리적 비약이 없는가
+   - 불필요하게 오래 걸린 분석은 무엇인가
+   - 놓친 단서와 재사용할 기법은 무엇인가
+3. `solved`면 풀이 과정과 실제 플래그를 포함한 Write-up을 workspace의 `work/reviewer.md`에 작성한다. 미해결이나 실패면 막힌 원인과 다음 가설을 작성한다.
+4. `reverser_writeup`으로 저장한다. solved는 `reports/writeup.md`, 나머지는 `reports/review.md`에 남는다.
+5. 30분 이상 걸렸거나 미해결인 문제의 재사용 가능한 핵심 기법만 `reverser_learn`으로 남긴다.
 
-사이트 제출이나 호스트 바이너리 실행은 하지 마라. 마지막 응답은 8줄 이내로 검증 결과와 개선점만 요약하고 실제 플래그는 포함하지 마라.
+추가 풀이를 시작하거나 사이트에 제출하지 마라. 마지막 응답은 검토 결과와 저장 경로만 짧게 요약한다.

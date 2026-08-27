@@ -63,12 +63,21 @@ class Analyzer:
         profile: str,
         command: str,
         timeout_seconds: int | None = None,
+        hypothesis_id: str | None = None,
     ) -> tuple[dict[str, Any], CommandResult]:
         if profile not in PROFILES:
             raise AnalysisError(f"Unknown profile: {profile}")
         state = self.store.load(challenge_id)
         if state.get("status") not in {"solving", "researching"}:
             raise AnalysisError("Run triage before free-form analysis")
+        hypotheses = state.get("hypotheses", [])
+        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        if state.get("recon") and not hypotheses:
+            raise AnalysisError("Propose a flag hypothesis before further analysis")
+        if hypotheses and not active:
+            raise AnalysisError("Propose the next hypothesis before running analysis")
+        if active and active.get("id") != hypothesis_id:
+            raise AnalysisError("Verification commands require the active hypothesis_id")
         root = self.store.challenge_dir(challenge_id)
         result = self.worker.run(
             profile=profile,
@@ -76,7 +85,7 @@ class Analyzer:
             command=command,
             timeout_seconds=timeout_seconds,
         )
-        self._record_run(state, profile, result)
+        self._record_run(state, profile, result, hypothesis_id)
         self.store.save(state)
         return state, result
 
@@ -111,6 +120,9 @@ class Analyzer:
             raise AnalysisError("Flag not found in evidence run")
         if value not in state["flags"]:
             state["flags"].append(value)
+        state.setdefault("flag_evidence", [])[:] = [
+            item for item in state.get("flag_evidence", []) if item.get("flag") != value
+        ] + [{"flag": value, "evidence_run": evidence_run}]
         state["status"] = "solved"
         state["solved_at"] = state.get("solved_at") or utc_now()
         state["finished_at"] = state.get("finished_at") or state["solved_at"]
@@ -140,7 +152,8 @@ class Analyzer:
 
     # 워커 결과를 output/0001-profile.stdout.log 형태로 저장하고 tool_runs 메타를 state에 추가
     def _record_run(
-        self, state: dict[str, Any], label: str, result: CommandResult
+        self, state: dict[str, Any], label: str, result: CommandResult,
+        hypothesis_id: str | None = None,
     ) -> None:
         root = self.store.challenge_dir(state["challenge_id"])
         sequence = len(state["tool_runs"]) + 1
@@ -160,4 +173,6 @@ class Analyzer:
             "stderr": stderr_path.relative_to(root).as_posix(),
             "time": utc_now(),
         }
+        if hypothesis_id:
+            record["hypothesis_id"] = hypothesis_id
         state["tool_runs"].append(record)
