@@ -90,6 +90,8 @@ def parser() -> argparse.ArgumentParser:
 
 # CLI 진입점 — Settings/ChallengeStore 로드 후 각 액션별로 Analyzer/Importer 등을 호출해 JSON으로 응답
 def main(argv: list[str] | None = None) -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     args = parser().parse_args(argv)
     try:
         settings = Settings.load(PROJECT_ROOT)
