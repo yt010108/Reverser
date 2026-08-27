@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, watch, type FSWatcher } from "node:fs";
 import { delimiter, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -246,8 +246,33 @@ function result(value: CliResult) {
 
 export default function (pi: ExtensionAPI) {
   let solverTerminal: string | undefined;
+  const solverWatchers = new Map<string, FSWatcher>();
+
+  const watchSolver = (challengeId: string, path: string) => {
+    let notified = false;
+    const notify = () => {
+      try {
+        const job = JSON.parse(readFileSync(path, "utf8")) as { status?: string; result?: string };
+        if (job.status !== "done" || notified) return;
+        notified = true;
+        solverWatchers.get(challengeId)?.close();
+        solverWatchers.delete(challengeId);
+        pi.sendMessage(
+          { customType: "solver", content: `[Solver] ${challengeId} 완료 · ${job.result}`, display: true },
+          { triggerTurn: true, deliverAs: "followUp" },
+        );
+      } catch {}
+    };
+    solverWatchers.get(challengeId)?.close();
+    solverWatchers.set(challengeId, watch(dirname(path), (_event, file) => {
+      if (file?.toString() === "solver.json") notify();
+    }));
+    notify();
+  };
 
   pi.on("session_shutdown", async () => {
+    for (const watcher of solverWatchers.values()) watcher.close();
+    solverWatchers.clear();
     const context = browserContext;
     browserContext = undefined;
     browserPage = undefined;
@@ -258,7 +283,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|terminate|learn)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|terminate|learn|solver-start|solver-finish)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 reverser_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -310,7 +335,11 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "reverser_writeup", label: "CTF: Write-up 저장", description: "Save an exact private write-up and a Git-safe public copy with known and flag-shaped values redacted.",
     parameters: Type.Object({ challenge_id: Type.String(), file: Type.String() }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["writeup", p.challenge_id, "--file", p.file], signal)); },
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const saved = await runCli(["writeup", p.challenge_id, "--file", p.file], signal);
+      if (saved.exitCode === 0) await runCli(["solver-finish", p.challenge_id], signal);
+      return result(saved);
+    },
   });
   pi.registerTool({
     name: "reverser_solution_search", label: "CTF: 로컬 풀이 방법 검색", description: "After 30 minutes, search only locally saved difficult-case notes.",
@@ -320,7 +349,11 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "reverser_mark_unsolved", label: "CTF: 미해결 기록", description: "Stop an unresolved attempt and record its blocker in progress.md.",
     parameters: Type.Object({ challenge_id: Type.String(), reason_file: Type.String() }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["unsolved", p.challenge_id, "--reason-file", p.reason_file], signal)); },
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const marked = await runCli(["unsolved", p.challenge_id, "--reason-file", p.reason_file], signal);
+      if (marked.exitCode === 0) await runCli(["solver-finish", p.challenge_id], signal);
+      return result(marked);
+    },
   });
   pi.registerTool({
     name: "reverser_learn", label: "CTF: 풀이 방법 저장", description: "Save a reusable solution note only for a researched or unsolved challenge; easy solves are rejected.",
@@ -364,6 +397,11 @@ export default function (pi: ExtensionAPI) {
       ], { signal });
       if (sent.code !== 0) return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
       solverTerminal = handle;
+      const tracked = await runCli(["solver-start", p.challenge_id, "--terminal", handle], signal);
+      if (tracked.exitCode !== 0) return result(tracked);
+      const path = (tracked.parsed as { path?: string } | undefined)?.path;
+      if (!path) return { content: [{ type: "text" as const, text: "solver.json 경로를 받지 못했습니다." }], details: { handle }, isError: true };
+      watchSolver(p.challenge_id, path);
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
         details: { challengeId: p.challenge_id, terminal: handle },

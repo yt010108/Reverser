@@ -33,23 +33,38 @@ Pi에서:
 /Reverser
 ```
 
-Pi는 문제 URL이나 로컬 파일을 받아 문제를 가져온 뒤, 풀이를 별도 Solver Pi에 위임한다. 플래그 제출과 작업자 네트워크는 없다.
+Parent Pi는 문제 URL이나 로컬 파일을 가져온 뒤 풀이를 별도 Solver Pi에 위임하고 즉시 다시 명령을 받는다. 플래그 제출과 작업자 네트워크는 없다.
 
 ```text
-부모: 가져오기 → Solver: triage·풀이·Write-up → Reviewer: 검증·개선 피드백
+Parent: 가져오기 → Orca Solver: triage·풀이·Write-up
+                 ← [Solver] 완료 메시지
+                 → 필요할 때 Reviewer 호출
 ```
 
-Solver와 Reviewer는 각각 별도 Pi 프로세스에서 실행되므로 부모 Pi에 긴 풀이 컨텍스트가 누적되지 않는다. 현재 모델과 thinking 설정을 상속하고, 대화 세션은 저장하지 않으며 진행 상태와 결과는 `runs/<CHALLENGE_ID>/`에만 남긴다.
+`reverser_solve`는 현재 모델과 thinking을 상속한 Solver Pi를 Orca 서브 터미널에서 시작하며 종료를 기다리지 않는다. 첫 Solver는 Parent 오른쪽에, 추가 Solver는 오른쪽 아래로 쌓인다. 마지막 터미널이 닫혔으면 Parent 기준 분할을 한 번 재시도한다.
 
-Pi TUI는 자식의 사고 과정이나 명령 출력 전문을 가져오지 않고 작업 종류와 경과시간만 보여준다. 10초 이상 실행되는 작업은 진행 시간을 주기적으로 갱신한다.
+Solver의 긴 풀이 컨텍스트와 출력은 Parent에 들어오지 않는다. 진행 상태와 결과는 `runs/<CHALLENGE_ID>/`에 남고, 완료 시 Parent의 follow-up 큐에 다음 한 줄만 전달된다.
 
 ```text
-[Solver] core · radare2 정적 분석 · 실행 중 · 18.2초
-[Solver] ghidra · Ghidra 관심 함수 디컴파일 · 완료 · 26.9초
-[Reviewer] Write-up 저장 · 완료 · 0.4초
+[Solver] CHALLENGE_ID 완료 · solved
 ```
 
-30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. Solver 종료 후 미해결·30분 초과 문제만 새 Reviewer가 검토한다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
+30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. `reverser_review`는 완료 메시지 뒤 필요할 때 별도로 호출하며, 풀이 중인 30분 이내 문제는 검토하지 않는다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
+
+### Solver 완료 알림
+
+Solver를 시작하면 문제 폴더의 `solver.json`을 다음처럼 기록한다.
+
+```json
+{
+  "challenge_id": "CHALLENGE_ID",
+  "status": "running",
+  "terminal": "ORCA_TERMINAL_ID",
+  "result": null
+}
+```
+
+Write-up 저장이나 미해결 기록이 끝나면 `status`를 `done`으로, `result`를 `solved`, `unsolved`, `failed` 중 하나로 바꾼다. JSON은 임시 파일을 원자적으로 교체해 기록한다. Parent는 해당 폴더를 `fs.watch`로 감시하므로 주기적인 상태 조회 없이 변경 이벤트가 발생할 때만 JSON을 읽고 완료 메시지를 큐에 넣는다.
 
 ## Playwright 브라우저
 
@@ -117,6 +132,7 @@ reverser-ghidra /challenge/input/chall /challenge/output/decompile.c main check_
 ```text
 runs/<CHALLENGE_ID>/
 ├── progress.md
+├── solver.json
 ├── original/
 ├── work/
 ├── output/
