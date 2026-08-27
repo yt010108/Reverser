@@ -328,12 +328,6 @@ export default function (pi: ExtensionAPI) {
       if (current.exitCode !== 0) return result(current);
       const context: AgentContext = { model: ctx.model, thinkingLevel: ctx.thinkingLevel };
       const handle = await openTerminal(solverTerminal, signal);
-      const sent = await pi.exec(orca, [
-        "terminal", "send", "--terminal", handle,
-        "--text", agentCommand("solver", p.challenge_id, context), "--enter", "--json",
-      ], { signal });
-      if (sent.code !== 0) return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
-      solverTerminal = handle;
       const tracked = await runCli(["solver-start", p.challenge_id, "--terminal", handle], signal);
       if (tracked.exitCode !== 0) return result(tracked);
       const path = (tracked.parsed as { path?: string } | undefined)?.path;
@@ -341,6 +335,16 @@ export default function (pi: ExtensionAPI) {
       watchJob("solver", p.challenge_id, path, (job) => {
         if (job.terminal) void launchReviewer(p.challenge_id, job.terminal, context);
       });
+      const sent = await pi.exec(orca, [
+        "terminal", "send", "--terminal", handle,
+        "--text", agentCommand("solver", p.challenge_id, context), "--enter", "--json",
+      ], { signal });
+      if (sent.code !== 0) {
+        await runCli(["terminate", p.challenge_id, "--reason", "solver_start_failed"]);
+        await runCli(["solver-finish", p.challenge_id]);
+        return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
+      }
+      solverTerminal = handle;
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
         details: { challengeId: p.challenge_id, terminal: handle },

@@ -274,6 +274,19 @@ class ChallengeStore:
     def start_solver(self, challenge_id: str, terminal: str) -> dict[str, Any]:
         self.load(challenge_id)
         path = self.challenge_dir(challenge_id) / "solver.json"
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("status") == "running":
+                raise RuntimeError("Solver is already running")
+        except (OSError, json.JSONDecodeError):
+            pass
+        running = 0
+        for job in self.root.rglob("solver.json"):
+            try:
+                running += json.loads(job.read_text(encoding="utf-8")).get("status") == "running"
+            except (OSError, json.JSONDecodeError):
+                pass
+        if running >= 2:
+            raise RuntimeError("At most two Solvers can run at once")
         value = {"challenge_id": challenge_id, "status": "running", "terminal": terminal, "result": None}
         atomic_write_json(path, value)
         return {**value, "path": str(path)}

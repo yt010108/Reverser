@@ -35,6 +35,10 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn("await pi.exec", solve_block)
         self.assertIn('agentCommand("solver"', solve_block)
         self.assertIn('runCli(["solver-start"', solve_block)
+        self.assertLess(
+            solve_block.index('runCli(["solver-start"'),
+            solve_block.index('"terminal", "send", "--terminal", handle'),
+        )
         self.assertIn('pi.sendMessage(', extension)
         self.assertIn('deliverAs: "followUp"', extension)
         self.assertIn('file?.toString() === `${role}.json`', extension)

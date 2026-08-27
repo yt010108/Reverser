@@ -93,12 +93,25 @@ class WorkflowTests(unittest.TestCase):
         running = self.store.start_solver(state["challenge_id"], "term-1")
         self.assertEqual(json.loads(Path(running["path"]).read_text(encoding="utf-8"))["status"], "running")
         with self.assertRaises(RuntimeError):
+            self.store.start_solver(state["challenge_id"], "term-2")
+        with self.assertRaises(RuntimeError):
             self.store.finish_solver(state["challenge_id"])
         state["status"] = "solved"
         self.store.save(state)
         done = self.store.finish_solver(state["challenge_id"])
         self.assertEqual(done["result"], "solved")
         self.assertEqual(done["terminal"], "term-1")
+
+    def test_at_most_two_solvers_can_run(self):
+        states = [self.store.create(title=f"Solver {index}", platform_url="") for index in range(3)]
+        self.store.start_solver(states[0]["challenge_id"], "term-1")
+        self.store.start_solver(states[1]["challenge_id"], "term-2")
+        with self.assertRaises(RuntimeError):
+            self.store.start_solver(states[2]["challenge_id"], "term-3")
+        states[0]["status"] = "failed"
+        self.store.save(states[0])
+        self.store.finish_solver(states[0]["challenge_id"])
+        self.store.start_solver(states[2]["challenge_id"], "term-3")
 
     def test_reviewer_json_requires_saved_report(self):
         state = self.store.create(title="Reviewed", platform_url="")

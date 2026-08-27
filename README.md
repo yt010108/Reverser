@@ -43,6 +43,8 @@ Parent: 가져오기 → Orca Solver: entry 정찰 → flag 후보 → 가설 �
 
 `reverser_solve`는 현재 모델과 thinking을 상속한 Solver Pi를 Orca 서브 터미널에서 시작하며 종료를 기다리지 않는다. 첫 Solver는 Parent 오른쪽에, 추가 Solver는 오른쪽 아래로 쌓인다. 마지막 터미널이 닫혔으면 Parent 기준 분할을 한 번 재시도한다.
 
+동시에 `running`인 Solver는 최대 2개다. 하나가 완료되어 `done`이 되면 다음 Solver를 시작할 수 있다. Reviewer는 이 제한에 포함하지 않는다.
+
 Solver의 긴 풀이 컨텍스트와 출력은 Parent에 들어오지 않는다. 플래그와 근거 run을 저장하고 종료하면 같은 Orca 터미널에서 새 컨텍스트의 Reviewer가 자동으로 시작된다. Parent에는 각 단계의 완료 메시지만 전달된다.
 
 ```text
