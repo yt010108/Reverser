@@ -14,7 +14,7 @@ Reverser/
 ├── memory/techniques/   # 승인된 재사용 기법
 ├── tests/
 ├── writeups/            # 플래그가 제거된 공개 write-up
-└── runs/<CHALLENGE_ID>/ # 원본과 분석 결과, Git 제외
+└── runs/[EVENT/]<CHALLENGE_ID>/ # 원본과 분석 결과, Git 제외
 ```
 
 전체 `ctf-skills` 저장소는 복사하지 않는다. 필요한 흐름은 로컬 Pi 스킬에만 두며 참고 원본은 [ljagiello/ctf-skills](https://github.com/ljagiello/ctf-skills)다.
@@ -33,10 +33,10 @@ Pi에서:
 /Reverser
 ```
 
-Parent Pi는 문제 URL이나 로컬 파일을 가져온 뒤 풀이를 별도 Solver Pi에 위임하고 즉시 다시 명령을 받는다. 플래그 제출과 작업자 네트워크는 없다.
+Parent Pi는 문제 URL이나 로컬 파일을 가져온 뒤 풀이를 별도 Solver Pi에 위임하고 즉시 다시 명령을 받는다. 플래그 제출과 작업자 네트워크는 없다. 확장 코드를 바꿘으면 실행 중인 Pi에서 `/reload`로 다시 읽는다.
 
 ```text
-Parent: 가져오기 → Orca Solver: triage·풀이·Write-up
+Parent: 가져오기 → Orca Solver: 정찰 → 가설 → 검증 → Write-up
                  ← [Solver] 완료 메시지
                  → 필요할 때 Reviewer 호출
 ```
@@ -48,6 +48,14 @@ Solver의 긴 풀이 컨텍스트와 출력은 Parent에 들어오지 않는다.
 ```text
 [Solver] CHALLENGE_ID 완료 · solved
 ```
+
+### Solver 가설 루프
+
+Solver는 초기 정찰 후 한 번에 하나의 가설만 다룬다. 가설에는 주장, 검사 방법, 반증 조건, 유한한 검사 범위를 기록한다. 가설을 세운 모델과 검증 모델을 교체하며, 검증 모델은 확장에서 교체할 수 있다. 현재 기본값은 Luna다.
+
+검증 명령은 활성 `hypothesis_id`를 포함해야 하고, 결과는 `confirmed`, `rejected`, `inconclusive` 중 하나와 실제 run 근거로 마감한다. 마감 후 기존 모델로 복귀해 다음 가설을 세운다. 횟수 제한은 없다.
+
+`progress.md`에 현재 단계, 활성 가설, 검증 run, 종료된 가설 이력을 저장해 사용자가 바로 확인할 수 있다. Solver의 파일 도구는 `reverser_status`가 반환한 `workspace`만 보도록 프롬프트에서 제한한다. 이는 행동 지침이며 강제 샌드박스는 아니다.
 
 30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. `reverser_review`는 완료 메시지 뒤 필요할 때 별도로 호출하며, 풀이 중인 30분 이내 문제는 검토하지 않는다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
 
@@ -130,7 +138,7 @@ reverser-ghidra /challenge/input/chall /challenge/output/decompile.c main check_
 ## 문제 결과
 
 ```text
-runs/<CHALLENGE_ID>/
+runs/[EVENT/]<CHALLENGE_ID>/
 ├── progress.md
 ├── solver.json
 ├── original/
@@ -139,7 +147,7 @@ runs/<CHALLENGE_ID>/
 └── reports/
 ```
 
-`progress.md`에 `solving`, `researching`, `solved`, `unsolved`, `failed` 상태와 경과시간, 실행 기록을 함께 저장한다. 실제 플래그와 비공개 write-up은 `runs/`에만 남고, 플래그를 제거한 결과만 `writeups/`에 저장한다.
+event가 있으면 문제는 `runs/<EVENT>/<CHALLENGE_ID>/`, 없으면 `runs/<CHALLENGE_ID>/`에 저장한다. `progress.md`에 상태와 경과시간, 실행 기록, 가설 이력을 함께 저장한다. 실제 플래그와 비공개 write-up은 `runs/`에만 남고, 플래그를 제거한 결과만 `writeups/`에 저장한다.
 
 ## 직접 CLI
 
@@ -149,6 +157,9 @@ py -3 -m reverser_harness.cli doctor
 py -3 -m reverser_harness.cli import-local --title rev1 --file C:\Downloads\rev1
 py -3 -m reverser_harness.cli list
 py -3 -m reverser_harness.cli status CHALLENGE_ID
+py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID propose --claim "..." --test "..." --falsifier "..." --exhaustion "..."
+py -3 -m reverser_harness.cli exec CHALLENGE_ID --profile core --command "..." --hypothesis h1
+py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID resolve --hypothesis-id h1 --outcome rejected --evidence-run 1 --observation "..."
 py -3 -m reverser_harness.cli solution-search CHALLENGE_ID "xor validation loop"
 py -3 -m reverser_harness.cli dashboard
 ```

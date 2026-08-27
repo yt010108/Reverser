@@ -29,7 +29,7 @@ const AGENT_TOOLS: Record<AgentRole, string[]> = {
   solver: [
     "read", "write", "edit", "grep", "find", "ls",
     "reverser_status", "reverser_triage", "reverser_exec", "reverser_record_flag",
-    "reverser_writeup", "reverser_solution_search", "reverser_mark_unsolved", "reverser_learn",
+    "reverser_hypothesis", "reverser_writeup", "reverser_solution_search", "reverser_mark_unsolved", "reverser_learn",
   ],
   reviewer: [
     "read", "write", "edit", "grep", "find", "ls",
@@ -64,6 +64,7 @@ function describeAgentTool(toolName: string, args: unknown) {
   switch (toolName) {
     case "reverser_triage": return "core · 정적 triage";
     case "reverser_status": return "문제 상태 확인";
+    case "reverser_hypothesis": return "가설 상태 갱신";
     case "reverser_record_flag": return "플래그 후보 로컬 기록";
     case "reverser_writeup": return "Write-up 저장";
     case "reverser_solution_search": return "로컬 풀이 방법 검색";
@@ -246,6 +247,8 @@ function result(value: CliResult) {
 
 export default function (pi: ExtensionAPI) {
   let solverTerminal: string | undefined;
+  let plannerModel: { provider: string; id: string } | undefined;
+  let plannerThinking: ReturnType<typeof pi.getThinkingLevel> | undefined;
   const solverWatchers = new Map<string, FSWatcher>();
 
   const watchSolver = (challengeId: string, path: string) => {
@@ -283,7 +286,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|unsolved|terminate|learn|solver-start|solver-finish)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|hypothesis|unsolved|terminate|learn|solver-start|solver-finish)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 reverser_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -324,8 +327,52 @@ export default function (pi: ExtensionAPI) {
   });
   pi.registerTool({
     name: "reverser_exec", label: "CTF: 격리 실행", description: "Run a command immediately in a fresh networkless worker after triage; never run challenge binaries on the host.",
-    parameters: Type.Object({ challenge_id: Type.String(), profile: Type.Union([Type.Literal("core"), Type.Literal("dynamic"), Type.Literal("ghidra"), Type.Literal("angr")]), command: Type.String(), timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 7200 })) }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { const args = ["exec", p.challenge_id, "--profile", p.profile, "--command", p.command]; if (p.timeout) args.push("--timeout", String(p.timeout)); return result(await runCli(args, signal)); },
+    parameters: Type.Object({ challenge_id: Type.String(), profile: Type.Union([Type.Literal("core"), Type.Literal("dynamic"), Type.Literal("ghidra"), Type.Literal("angr")]), command: Type.String(), timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 7200 })), hypothesis_id: Type.Optional(Type.String()) }),
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const args = ["exec", p.challenge_id, "--profile", p.profile, "--command", p.command];
+      if (p.timeout) args.push("--timeout", String(p.timeout));
+      if (p.hypothesis_id) args.push("--hypothesis", p.hypothesis_id);
+      return result(await runCli(args, signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_hypothesis", label: "CTF: 가설", description: "Propose one falsifiable hypothesis or resolve the active hypothesis with a linked verification run.",
+    parameters: Type.Object({
+      challenge_id: Type.String(), action: Type.Union([Type.Literal("propose"), Type.Literal("resolve")]),
+      hypothesis_id: Type.Optional(Type.String()), claim: Type.Optional(Type.String()), test: Type.Optional(Type.String()),
+      falsifier: Type.Optional(Type.String()), exhaustion: Type.Optional(Type.String()),
+      outcome: Type.Optional(Type.Union([Type.Literal("confirmed"), Type.Literal("rejected"), Type.Literal("inconclusive")])),
+      evidence_run: Type.Optional(Type.Integer({ minimum: 1 })), observation: Type.Optional(Type.String()),
+    }),
+    async execute(_id, p, signal, _onUpdate, ctx) {
+      const args = ["hypothesis", p.challenge_id, p.action];
+      for (const [flag, value] of [
+        ["--hypothesis-id", p.hypothesis_id], ["--claim", p.claim], ["--test", p.test],
+        ["--falsifier", p.falsifier], ["--exhaustion", p.exhaustion], ["--outcome", p.outcome],
+        ["--observation", p.observation],
+      ] as Array<[string, string | undefined]>) if (value) args.push(flag, value);
+      if (p.evidence_run !== undefined) args.push("--evidence-run", String(p.evidence_run));
+      const updated = await runCli(args, signal);
+      if (updated.exitCode !== 0) return result(updated);
+      let switched = false;
+      if (p.action === "propose") {
+        if (!plannerModel && ctx.model) plannerModel = { provider: ctx.model.provider, id: ctx.model.id };
+        plannerThinking ??= pi.getThinkingLevel();
+        for (const provider of [ctx.model?.provider, "openai-codex", "opencode"]) {
+          if (!provider) continue;
+          const model = ctx.modelRegistry.find(provider, "gpt-5.6-luna");
+          if (model && await pi.setModel(model)) { switched = true; break; }
+        }
+        if (switched) pi.setThinkingLevel("medium");
+      } else if (plannerModel) {
+        const model = ctx.modelRegistry.find(plannerModel.provider, plannerModel.id);
+        switched = !!model && await pi.setModel(model);
+        if (plannerThinking) pi.setThinkingLevel(plannerThinking);
+      }
+      const response = result(updated);
+      if (!switched) response.content[0].text += `\n\n모델 전환 실패: 현재 모델을 유지합니다.`;
+      return response;
+    },
   });
   pi.registerTool({
     name: "reverser_record_flag", label: "CTF: 플래그 로컬 기록", description: "Require the candidate to appear in one successful tool run, then store it locally without submitting or echoing it.",

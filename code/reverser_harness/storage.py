@@ -156,6 +156,7 @@ class ChallengeStore:
             "artifacts": [],
             "tool_runs": [],
             "solution_searches": [],
+            "hypotheses": [],
         }
         self.save(state)
         return state
@@ -177,6 +178,7 @@ class ChallengeStore:
     def save(self, state: dict[str, Any]) -> None:
         state["updated_at"] = utc_now()
         tools = state.get("tool_runs", [])
+        clean = lambda value: str(value).replace("\r", " ").replace("\n", " ").strip()
         lines = [
             f"# CTF progress: {state['title']}",
             "",
@@ -188,6 +190,26 @@ class ChallengeStore:
             f"- Research started: `{state.get('research_started_at') or '-'}`",
             f"- Updated: `{state['updated_at']}`",
         ]
+        hypotheses = state.get("hypotheses", [])
+        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        phase = "verify" if active else "hypothesize" if hypotheses else "recon"
+        lines.extend(["", "## Solver", "", f"- Phase: `{phase}`"])
+        if active:
+            lines.extend([
+                "", "## Current hypothesis", "", f"### {clean(active.get('id', '-'))}",
+                f"- Claim: {clean(active.get('claim', ''))}",
+                f"- Test: {clean(active.get('test', ''))}",
+                f"- Falsifier: {clean(active.get('falsifier', ''))}",
+                f"- Exhaustion: {clean(active.get('exhaustion', ''))}",
+                f"- Evidence: {', '.join(map(str, active.get('evidence_runs', []))) or '-'}",
+                "- Status: `testing`",
+            ])
+        history = [item for item in hypotheses if item.get("status") != "testing"]
+        if history:
+            lines.extend(["", "## Hypothesis history", ""])
+            for item in history:
+                runs = ", ".join(map(str, item.get("evidence_runs", []))) or "-"
+                lines.append(f"- `{clean(item.get('id', '-'))}` `{clean(item.get('status', '-'))}` — {clean(item.get('claim', ''))} — {clean(item.get('observation', ''))} (runs: {runs})")
         if state.get("blocker"):
             lines.extend(["", "## Blocker", "", str(state["blocker"])])
         searches = state.get("solution_searches", [])
@@ -244,6 +266,52 @@ class ChallengeStore:
         value = {"challenge_id": challenge_id, "status": "done", "terminal": terminal, "result": result}
         atomic_write_json(path, value)
         return {**value, "path": str(path)}
+
+    def update_hypothesis(
+        self,
+        challenge_id: str,
+        action: str,
+        *,
+        hypothesis_id: str = "",
+        claim: str = "",
+        test: str = "",
+        falsifier: str = "",
+        exhaustion: str = "",
+        outcome: str = "",
+        evidence_run: int | None = None,
+        observation: str = "",
+    ) -> dict[str, Any]:
+        state = self.load(challenge_id)
+        hypotheses = state.setdefault("hypotheses", [])
+        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        if action == "propose":
+            if state.get("status") not in {"solving", "researching"}:
+                raise RuntimeError("Run triage before proposing a hypothesis")
+            if active:
+                raise RuntimeError("Resolve the active hypothesis before proposing another")
+            values = [claim.strip(), test.strip(), falsifier.strip(), exhaustion.strip()]
+            if any(not value or len(value) > 1000 for value in values):
+                raise ValueError("claim, test, falsifier, and exhaustion are required")
+            active = {
+                "id": f"h{len(hypotheses) + 1}", "claim": values[0], "test": values[1],
+                "falsifier": values[2], "exhaustion": values[3], "status": "testing", "evidence_runs": [],
+            }
+            hypotheses.append(active)
+        elif action == "resolve":
+            if not active or active.get("id") != hypothesis_id:
+                raise RuntimeError("Unknown active hypothesis")
+            if outcome not in {"confirmed", "rejected", "inconclusive"} or evidence_run is None or not observation.strip():
+                raise ValueError("outcome, evidence_run, and observation are required")
+            runs = [item for item in state.get("tool_runs", []) if item.get("hypothesis_id") == hypothesis_id]
+            if evidence_run not in {item.get("sequence") for item in runs}:
+                raise RuntimeError("Evidence run does not belong to the active hypothesis")
+            active["status"] = outcome
+            active["observation"] = observation.strip()
+            active["evidence_runs"] = [item["sequence"] for item in runs]
+        else:
+            raise ValueError("Unknown hypothesis action")
+        self.save(state)
+        return {"phase": "verify" if action == "propose" else "hypothesize", "hypothesis": active}
 
     # 원본 첨부 파일을 original/에 복사하고 artifact 목록에 등록 — 중복 시 -1, -2 접미사
     def add_original(self, state: dict[str, Any], source: Path, name: str | None = None) -> Path:

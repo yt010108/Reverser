@@ -1,0 +1,36 @@
+{
+  "title": "BrunnerCTF 2026 Roadmap",
+  "event": "BrunnerCTF 2026 rev",
+  "category": "reverse",
+  "architecture": null,
+  "bits": null,
+  "source_url": "",
+  "challenge_id": "brunnerctf-2026-roadmap-9fc50b51",
+  "attachments": [
+    {
+      "name": "README.md",
+      "size": 312,
+      "sha256": "9dd7f985f99f6f34c72f850cc3cf828fc1b67f06db4a8eab2dc2fcfe6dace212"
+    },
+    {
+      "name": "compose.yaml",
+      "size": 63,
+      "sha256": "f72c21f8ef16bed2e868a089539184ccd0d7fa5d1307215c8d44df4dc2560f04"
+    },
+    {
+      "name": "default.conf",
+      "size": 9424,
+      "sha256": "5434eb8fb5eb952c37b4adfc75b47de72a3d19a490de98f7e565db25be7c8004"
+    },
+    {
+      "name": "Dockerfile",
+      "size": 149,
+      "sha256": "141facfaa111f1dcd471f2e01a95fa955b9d90506c42ab76a1490a4290d5bb59"
+    },
+    {
+      "name": "roadmap-badges.conf",
+      "size": 404,
+      "sha256": "330d289f04bd44a26760c05205341e5c51f5cde23c24d11e5658843a046a7012"
+    }
+  ]
+}
