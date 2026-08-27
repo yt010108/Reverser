@@ -50,6 +50,18 @@ def parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status")
     status.add_argument("challenge_id")
 
+    hypothesis = sub.add_parser("hypothesis")
+    hypothesis.add_argument("challenge_id")
+    hypothesis.add_argument("hypothesis_action", choices=("propose", "resolve"))
+    hypothesis.add_argument("--hypothesis-id", default="")
+    hypothesis.add_argument("--claim", default="")
+    hypothesis.add_argument("--test", default="")
+    hypothesis.add_argument("--falsifier", default="")
+    hypothesis.add_argument("--exhaustion", default="")
+    hypothesis.add_argument("--outcome", default="")
+    hypothesis.add_argument("--evidence-run", type=int)
+    hypothesis.add_argument("--observation", default="")
+
     local = sub.add_parser("import-local")
     local.add_argument("--title", required=True)
     local.add_argument("--file", action="append", type=Path, required=True)
@@ -64,6 +76,7 @@ def parser() -> argparse.ArgumentParser:
     execute.add_argument("--profile", choices=sorted(PROFILES), required=True)
     execute.add_argument("--command", required=True)
     execute.add_argument("--timeout", type=int)
+    execute.add_argument("--hypothesis")
 
     flag = sub.add_parser("flag")
     flag.add_argument("challenge_id")
@@ -114,7 +127,17 @@ def main(argv: list[str] | None = None) -> int:
             emit([visible(item, settings) for item in store.list()])
             return 0
         if args.action == "status":
-            emit(visible(store.load(args.challenge_id), settings))
+            state = visible(store.load(args.challenge_id), settings)
+            state["workspace"] = str(store.challenge_dir(args.challenge_id))
+            emit(state)
+            return 0
+        if args.action == "hypothesis":
+            emit(store.update_hypothesis(
+                args.challenge_id, args.hypothesis_action,
+                hypothesis_id=args.hypothesis_id, claim=args.claim, test=args.test,
+                falsifier=args.falsifier, exhaustion=args.exhaustion, outcome=args.outcome,
+                evidence_run=args.evidence_run, observation=args.observation,
+            ))
             return 0
         if args.action == "solver-start":
             emit(store.start_solver(args.challenge_id, args.terminal))
@@ -150,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
             state, result = analyzer.triage(args.challenge_id)
             emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr})
         elif args.action == "exec":
-            state, result = analyzer.run_command(args.challenge_id, args.profile, args.command, args.timeout)
+            state, result = analyzer.run_command(args.challenge_id, args.profile, args.command, args.timeout, args.hypothesis)
             emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "timed_out": result.timed_out, "truncated": result.truncated})
         elif args.action == "flag":
             state = analyzer.record_flag(args.challenge_id, args.value, args.evidence_run)

@@ -18,6 +18,11 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(args.evidence_run, 7)
 
+    def test_hypothesis_parser_keeps_cli_action(self):
+        args = parser().parse_args(["hypothesis", "abc-123", "propose", "--claim", "xor"])
+        self.assertEqual(args.action, "hypothesis")
+        self.assertEqual(args.hypothesis_action, "propose")
+
     def test_main_uses_utf8_output(self):
         buffer = io.BytesIO()
         stdout = io.TextIOWrapper(buffer, encoding="cp949")

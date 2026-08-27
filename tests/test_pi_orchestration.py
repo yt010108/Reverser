@@ -39,6 +39,10 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('deliverAs: "followUp"', extension)
         self.assertIn('file?.toString() === "solver.json"', extension)
         self.assertIn('runCli(["solver-finish", p.challenge_id]', extension)
+        self.assertIn('name: "reverser_hypothesis"', extension)
+        self.assertIn('"gpt-5.6-luna"', extension)
+        self.assertIn('await pi.setModel(model)', extension)
+        self.assertIn('"--hypothesis", p.hypothesis_id', extension)
         self.assertIn('event.type === "tool_execution_start"', extension)
         self.assertIn('event.type === "tool_execution_end"', extension)
         self.assertIn("elapsedText", extension)
@@ -56,6 +60,9 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertNotIn('"reverser_browser"', reviewer_block)
         self.assertTrue((ROOT / ".pi" / "agents" / "solver.md").is_file())
         self.assertTrue((ROOT / ".pi" / "agents" / "reviewer.md").is_file())
+        solver_prompt = (ROOT / ".pi" / "agents" / "solver.md").read_text(encoding="utf-8")
+        self.assertIn("workspace 내부에만", solver_prompt)
+        self.assertIn("falsifier", solver_prompt)
 
     def test_parent_cannot_bypass_solver_layout_with_raw_orca_split(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")

@@ -100,6 +100,37 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(done["result"], "solved")
         self.assertEqual(done["terminal"], "term-1")
 
+    def test_hypothesis_is_visible_and_gates_verification(self):
+        class Worker:
+            def run(self, *, profile, command, **_kwargs):
+                return CommandResult(profile, command, 0, "verified", "")
+
+        state = self.store.create(title="Hypothesis", platform_url="", event="Event")
+        state["status"] = "solving"
+        self.store.save(state)
+        proposed = self.store.update_hypothesis(
+            state["challenge_id"], "propose", claim="input is XORed", test="trace three inputs",
+            falsifier="trace differs", exhaustion="all 16 bytes",
+        )
+        hypothesis_id = proposed["hypothesis"]["id"]
+        analyzer = Analyzer(self.store, Worker())
+        with self.assertRaises(RuntimeError):
+            analyzer.run_command(state["challenge_id"], "dynamic", "trace")
+        updated, _ = analyzer.run_command(
+            state["challenge_id"], "dynamic", "trace", hypothesis_id=hypothesis_id
+        )
+        run = updated["tool_runs"][-1]["sequence"]
+        self.store.update_hypothesis(
+            state["challenge_id"], "resolve", hypothesis_id=hypothesis_id,
+            outcome="confirmed", evidence_run=run, observation="trace matched",
+        )
+        saved = self.store.load(state["challenge_id"])
+        self.assertEqual(saved["hypotheses"][0]["status"], "confirmed")
+        self.assertEqual(saved["hypotheses"][0]["evidence_runs"], [run])
+        progress = (self.store.challenge_dir(state["challenge_id"]) / "progress.md").read_text(encoding="utf-8")
+        self.assertIn("## Hypothesis history", progress)
+        self.assertIn("input is XORed", progress)
+
     def test_solution_search_waits_for_budget_or_unsolved_status(self):
         state = self.store.create(title="Search Test", platform_url="")
         state["status"] = "solving"
