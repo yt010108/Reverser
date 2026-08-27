@@ -22,6 +22,8 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('name: "reverser_solve"', extension)
         self.assertIn('name: "reverser_review"', extension)
         self.assertIn('"--tools", AGENT_TOOLS[role].join(",")', extension)
+        self.assertIn('"pi", "--no-session", "--approve"', extension)
+        self.assertNotIn('"pi", "-p"', extension)
         self.assertIn('agentCommand("reviewer"', extension)
         self.assertIn('"terminal", "wait"', extension)
         self.assertIn('runCli(["reviewer-start"', extension)
@@ -51,6 +53,7 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('["--target", p.target]', extension)
         self.assertIn('["--parent-id", p.parent_id]', extension)
         self.assertIn('runCli(["reviewer-finish"', extension)
+        self.assertEqual(extension.count("ctx.shutdown();"), 3)
 
     def test_child_agents_are_scoped_and_do_not_receive_browser(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
@@ -76,11 +79,11 @@ class PiOrchestrationTests(unittest.TestCase):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
         self.assertIn(r"orca(?:\.exe)?\s+terminal\s+(?:split|create)", extension)
 
-    def test_flag_tool_requires_evidence_and_solution_search_is_local_only(self):
+    def test_flag_tool_requires_evidence_and_solution_search_is_removed(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
         self.assertIn("evidence_run: Type.Integer", extension)
         self.assertIn('"--evidence-run"', extension)
-        self.assertNotIn("public web results", extension)
+        self.assertNotIn("reverser_solution_search", extension)
 
     def test_completion_messages_include_challenge_id(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")

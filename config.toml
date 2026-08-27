@@ -1,9 +1,6 @@
 [project]
 name = "Reverser"
 
-[solve]
-research_after_seconds = 1800
-
 [images]
 core = "local/reverser-core:0.1"
 dynamic = "local/reverser-dynamic:0.1"
@@ -16,6 +13,3 @@ memory = "4g"
 cpus = "2"
 pids = 512
 max_output_bytes = 2097152
-
-[memory]
-search_limit = 5

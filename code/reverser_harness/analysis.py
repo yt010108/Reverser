@@ -56,7 +56,7 @@ class Analyzer:
         self.store.save(state)
         return state, result
 
-    # 지정 프로필(core/dynamic/ghidra/angr)로 격리 워커에서 명령 실행 — triage 후 solving/researching 상태에서만 허용
+    # 지정 프로필(core/dynamic/ghidra/angr)로 격리 워커에서 명령 실행
     def run_command(
         self,
         challenge_id: str,

@@ -1,6 +1,6 @@
 # CTF Reverse
 
-Pi와 네트워크 없는 Docker 작업자로 제공된 리버싱 CTF 문제를 분석하는 최소 하네스다. v1은 x86/amd64 Linux ELF와 PE 정적 분석만 지원하며 플래그를 제출하지 않는다. 활성 문제의 공개 풀이는 검색하지 않고, triage 이후 30분이 지나도 미해결일 때만 저장된 로컬 풀이 방법을 검색한다.
+Pi와 네트워크 없는 Docker 작업자로 제공된 리버싱 CTF 문제를 분석하는 최소 하네스다. v1은 x86/amd64 Linux ELF와 PE 정적 분석만 지원하며 플래그를 제출하거나 공개·로컬 풀이를 검색하지 않는다.
 
 ## 구조
 
@@ -41,7 +41,7 @@ Parent: 가져오기 → Orca Solver: entry 정찰 → flag 후보 → 가설 �
                  ← [Reviewer] 완료
 ```
 
-`reverser_solve`는 현재 모델과 thinking을 상속한 Solver Pi를 Orca 서브 터미널에서 시작하며 종료를 기다리지 않는다. 첫 Solver는 Parent 오른쪽에, 추가 Solver는 오른쪽 아래로 쌓인다. 마지막 터미널이 닫혔으면 Parent 기준 분할을 한 번 재시도한다.
+`reverser_solve`는 현재 모델과 thinking을 상속한 Solver Pi를 Orca 서브 터미널의 일반 TUI로 시작하며 종료를 기다리지 않는다. thinking과 도구 사용을 화면에서 볼 수 있고, 결과 저장이 끝나면 Pi가 스스로 종료된다. 첫 Solver는 Parent 오른쪽에, 추가 Solver는 오른쪽 아래로 쌓인다. 마지막 터미널이 닫혔으면 Parent 기준 분할을 한 번 재시도한다.
 
 동시에 `running`인 Solver는 최대 2개다. 하나가 완료되어 `done`이 되면 다음 Solver를 시작할 수 있다. Reviewer는 이 제한에 포함하지 않는다.
 
@@ -60,7 +60,7 @@ Solver는 가설 없이 entry point에서 main 계열 함수까지 먼저 분석
 
 `progress.md`에 recon, flag 후보, 가설 트리와 검증 run을 저장해 사용자가 바로 확인할 수 있다. Solver의 파일 도구는 `reverser_status`가 반환한 `workspace`만 보도록 프롬프트에서 제한한다. 이는 행동 지침이며 강제 샌드박스는 아니다.
 
-30분은 강제 종료 시간이 아니라 로컬 기법을 검색하는 `researching` 단계로 넘어가는 기준이다. Reviewer는 풀이 중에 개입하지 않고 `solved`, `unsolved`, `failed` 후에만 실행된다. 쉬운 문제는 메모리에 넣지 않고, 30분 이상 걸렸거나 미해결인 문제의 핵심 기법만 `memory/techniques/`에 저장한다.
+시간 제한과 검색 단계는 없다. Reviewer는 풀이 중에 개입하지 않고 `solved`, `unsolved`, `failed` 후에만 실행된다. 미해결 문제의 재사용 가능한 핵심 기법만 `memory/techniques/`에 저장할 수 있다.
 
 ### Solver 완료 알림
 
@@ -169,7 +169,6 @@ py -3 -m reverser_harness.cli recon CHALLENGE_ID --entry-point "0x401000" --main
 py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID propose --target "check_flag" --claim "..." --test "..." --falsifier "..." --exhaustion "..."
 py -3 -m reverser_harness.cli exec CHALLENGE_ID --profile core --command "..." --hypothesis h1
 py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID resolve --hypothesis-id h1 --outcome rejected --evidence-run 1 --observation "..."
-py -3 -m reverser_harness.cli solution-search CHALLENGE_ID "xor validation loop"
 py -3 -m reverser_harness.cli dashboard
 ```
 
