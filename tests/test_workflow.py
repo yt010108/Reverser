@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from reverser_harness.analysis import Analyzer
+from reverser_harness.cli import catalog
 from reverser_harness.config import Settings
 from reverser_harness.docker_backend import CommandResult
 from reverser_harness.importer import ChallengeImporter
@@ -58,7 +59,7 @@ class WorkflowTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_local_import_private_state_and_public_projection(self):
+    def test_local_import_state(self):
         sample = self.root / "sample.bin"
         sample.write_bytes(b"\x7fELFtest")
         state = ChallengeImporter(self.store).import_local(title="Rev One", files=[sample])
@@ -70,8 +71,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse((run_dir / "events.jsonl").exists())
         state["flags"] = ["SECRET"]
         projected = public_state(state)
-        self.assertNotIn("flags", projected)
-        self.assertEqual(projected["flag_candidates"], 1)
+        self.assertEqual(projected["flags"], ["SECRET"])
 
     def test_solution_notes_are_only_for_researched_or_unsolved_challenges(self):
         state = self.store.create(title="Memory Test", platform_url="")
@@ -100,6 +100,27 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(done["result"], "solved")
         self.assertEqual(done["terminal"], "term-1")
 
+    def test_reviewer_json_requires_saved_report(self):
+        state = self.store.create(title="Reviewed", platform_url="")
+        state["status"] = "solved"
+        self.store.save(state)
+        self.store.start_reviewer(state["challenge_id"], "term-1")
+        with self.assertRaises(RuntimeError):
+            self.store.start_reviewer(state["challenge_id"], "term-2")
+        with self.assertRaises(RuntimeError):
+            self.store.finish_reviewer(state["challenge_id"])
+        path = WriteupManager(self.store).save(state["challenge_id"], "# Solve")["path"]
+        self.assertEqual(Path(path).name, "writeup.md")
+        done = self.store.finish_reviewer(state["challenge_id"])
+        self.assertEqual(done["result"], "writeup.md")
+
+    def test_catalog_lists_project_events_and_challenges(self):
+        state = self.store.create(title="Catalog", platform_url="", event="CTF 2026")
+        result = catalog(self.store, self.settings)
+        self.assertEqual(result["project"]["name"], "test")
+        self.assertEqual(result["events"], ["CTF 2026"])
+        self.assertEqual(result["challenges"][0]["challenge_id"], state["challenge_id"])
+
     def test_hypothesis_is_visible_and_gates_verification(self):
         class Worker:
             def run(self, *, profile, command, **_kwargs):
@@ -108,12 +129,34 @@ class WorkflowTests(unittest.TestCase):
         state = self.store.create(title="Hypothesis", platform_url="", event="Event")
         state["status"] = "solving"
         self.store.save(state)
+        analyzer = Analyzer(self.store, Worker())
+        with self.assertRaises(RuntimeError):
+            self.store.update_hypothesis(
+                state["challenge_id"], "propose", target="check_flag", claim="input is XORed",
+                test="trace three inputs", falsifier="trace differs", exhaustion="all 16 bytes",
+            )
+        updated, _ = analyzer.run_command(state["challenge_id"], "core", "inspect entry point")
+        recon_run = updated["tool_runs"][-1]["sequence"]
+        self.store.update_recon(
+            state["challenge_id"], entry_point="0x401000", main="0x401120",
+            evidence_runs=[recon_run], flag_candidates=[{
+                "target": "check_flag", "reason": "called before success string",
+                "evidence_runs": [recon_run],
+            }],
+        )
+        with self.assertRaises(RuntimeError):
+            analyzer.run_command(state["challenge_id"], "core", "keep exploring")
+        with self.assertRaises(RuntimeError):
+            self.store.update_hypothesis(
+                state["challenge_id"], "propose", target="unknown", claim="input is XORed",
+                test="trace three inputs", falsifier="trace differs", exhaustion="all 16 bytes",
+            )
         proposed = self.store.update_hypothesis(
-            state["challenge_id"], "propose", claim="input is XORed", test="trace three inputs",
+            state["challenge_id"], "propose", target="check_flag",
+            claim="input is XORed", test="trace three inputs",
             falsifier="trace differs", exhaustion="all 16 bytes",
         )
         hypothesis_id = proposed["hypothesis"]["id"]
-        analyzer = Analyzer(self.store, Worker())
         with self.assertRaises(RuntimeError):
             analyzer.run_command(state["challenge_id"], "dynamic", "trace")
         updated, _ = analyzer.run_command(
@@ -124,12 +167,32 @@ class WorkflowTests(unittest.TestCase):
             state["challenge_id"], "resolve", hypothesis_id=hypothesis_id,
             outcome="confirmed", evidence_run=run, observation="trace matched",
         )
+        sibling = self.store.update_hypothesis(
+            state["challenge_id"], "propose", target="check_flag",
+            claim="input is added", test="trace addition",
+            falsifier="no addition", exhaustion="all 16 bytes",
+        )["hypothesis"]
+        sibling_state, _ = analyzer.run_command(
+            state["challenge_id"], "dynamic", "trace addition", hypothesis_id=sibling["id"]
+        )
+        self.store.update_hypothesis(
+            state["challenge_id"], "resolve", hypothesis_id=sibling["id"], outcome="rejected",
+            evidence_run=sibling_state["tool_runs"][-1]["sequence"], observation="no addition",
+        )
+        child = self.store.update_hypothesis(
+            state["challenge_id"], "propose", target="check_flag", parent_id=hypothesis_id,
+            claim="XOR key is repeated", test="compare key positions",
+            falsifier="positions differ", exhaustion="all 16 positions",
+        )["hypothesis"]
         saved = self.store.load(state["challenge_id"])
         self.assertEqual(saved["hypotheses"][0]["status"], "confirmed")
         self.assertEqual(saved["hypotheses"][0]["evidence_runs"], [run])
+        self.assertEqual(child["parent_id"], hypothesis_id)
         progress = (self.store.challenge_dir(state["challenge_id"]) / "progress.md").read_text(encoding="utf-8")
-        self.assertIn("## Hypothesis history", progress)
+        self.assertIn("## Recon", progress)
+        self.assertIn("## Hypothesis tree", progress)
         self.assertIn("input is XORed", progress)
+        self.assertLess(progress.index("  - `h3`"), progress.index("- `h2`"))
 
     def test_solution_search_waits_for_budget_or_unsolved_status(self):
         state = self.store.create(title="Search Test", platform_url="")
@@ -205,7 +268,8 @@ class WorkflowTests(unittest.TestCase):
         analyzer.run_command(state["challenge_id"], "core", "verify")
         solved = analyzer.record_flag(state["challenge_id"], flag, 2)
         self.assertEqual(solved["status"], "solved")
-        self.assertNotIn("flags", public_state(solved))
+        self.assertIn(flag, public_state(solved)["flags"])
+        self.assertEqual(solved["flag_evidence"], [{"flag": flag, "evidence_run": 2}])
 
     def test_failed_terminal_state_records_reason(self):
         state = self.store.create(title="Failed", platform_url="")
@@ -230,26 +294,23 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(updated["status"], status)
                 self.assertEqual(updated["exit_reason"], "agent_process_error")
 
-    def test_writeup_keeps_private_and_redacts_export(self):
+    def test_writeup_stays_inside_runs(self):
         state = self.store.create(title="Writeup Test", platform_url="https://ctf.example/challenge")
         flag = "TEST" + "{private-value}"
         state["flags"].append(flag)
+        state["status"] = "solved"
         self.store.save(state)
-        paths = WriteupManager(self.root, self.store).save(state["challenge_id"], f"# Solve\n\nFlag: {flag}\n")
-        self.assertIn(flag, Path(paths["private"]).read_text(encoding="utf-8"))
-        self.assertNotIn(flag, Path(paths["public"]).read_text(encoding="utf-8"))
-        metadata = json.loads((Path(paths["export_dir"]) / "metadata.json").read_text(encoding="utf-8"))
-        self.assertNotIn("flags", metadata)
+        path = Path(WriteupManager(self.store).save(state["challenge_id"], f"# Solve\n\nFlag: {flag}\n")["path"])
+        self.assertIn(flag, path.read_text(encoding="utf-8"))
+        self.assertEqual(path, self.store.challenge_dir(state["challenge_id"]) / "reports" / "writeup.md")
+        self.assertFalse((self.root / "writeups").exists())
 
-    def test_writeup_paths_do_not_collide_for_duplicate_titles(self):
-        first = self.store.create(title="Same Title", platform_url="", event="Event")
-        second = self.store.create(title="Same Title", platform_url="", event="Event")
-        manager = WriteupManager(self.root, self.store)
-        first_path = manager.save(first["challenge_id"], "# First")["export_dir"]
-        second_path = manager.save(second["challenge_id"], "# Second")["export_dir"]
-        self.assertNotEqual(first_path, second_path)
-        self.assertEqual(Path(first_path).parent.name, "event")
-        self.assertEqual(Path(first_path).name, first["challenge_id"])
+    def test_unsolved_reviewer_writes_review(self):
+        state = self.store.create(title="Unsolved", platform_url="", event="Event")
+        state["status"] = "unsolved"
+        self.store.save(state)
+        path = WriteupManager(self.store).save(state["challenge_id"], "# Blocker")["path"]
+        self.assertEqual(Path(path).name, "review.md")
 
 
 if __name__ == "__main__":
