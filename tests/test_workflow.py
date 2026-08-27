@@ -88,6 +88,18 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(destination.is_file())
         self.assertTrue(memory.search("XOR"))
 
+    def test_solver_json_tracks_running_and_done(self):
+        state = self.store.create(title="Tracked", platform_url="")
+        running = self.store.start_solver(state["challenge_id"], "term-1")
+        self.assertEqual(json.loads(Path(running["path"]).read_text(encoding="utf-8"))["status"], "running")
+        with self.assertRaises(RuntimeError):
+            self.store.finish_solver(state["challenge_id"])
+        state["status"] = "solved"
+        self.store.save(state)
+        done = self.store.finish_solver(state["challenge_id"])
+        self.assertEqual(done["result"], "solved")
+        self.assertEqual(done["terminal"], "term-1")
+
     def test_solution_search_waits_for_budget_or_unsolved_status(self):
         state = self.store.create(title="Search Test", platform_url="")
         state["status"] = "solving"

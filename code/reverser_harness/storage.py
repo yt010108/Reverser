@@ -225,6 +225,26 @@ class ChallengeStore:
                 items.append(value)
         return sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)
 
+    def start_solver(self, challenge_id: str, terminal: str) -> dict[str, Any]:
+        self.load(challenge_id)
+        path = self.challenge_dir(challenge_id) / "solver.json"
+        value = {"challenge_id": challenge_id, "status": "running", "terminal": terminal, "result": None}
+        atomic_write_json(path, value)
+        return {**value, "path": str(path)}
+
+    def finish_solver(self, challenge_id: str) -> dict[str, Any]:
+        result = str(self.load(challenge_id).get("status", ""))
+        if result not in {"solved", "unsolved", "failed"}:
+            raise RuntimeError("Solver must record a terminal challenge state before finishing")
+        path = self.challenge_dir(challenge_id) / "solver.json"
+        try:
+            terminal = str(json.loads(path.read_text(encoding="utf-8")).get("terminal", ""))
+        except (OSError, json.JSONDecodeError):
+            terminal = ""
+        value = {"challenge_id": challenge_id, "status": "done", "terminal": terminal, "result": result}
+        atomic_write_json(path, value)
+        return {**value, "path": str(path)}
+
     # 원본 첨부 파일을 original/에 복사하고 artifact 목록에 등록 — 중복 시 -1, -2 접미사
     def add_original(self, state: dict[str, Any], source: Path, name: str | None = None) -> Path:
         source = source.resolve()

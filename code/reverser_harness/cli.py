@@ -44,6 +44,12 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor")
     sub.add_parser("list")
 
+    solver_start = sub.add_parser("solver-start")
+    solver_start.add_argument("challenge_id")
+    solver_start.add_argument("--terminal", required=True)
+    solver_finish = sub.add_parser("solver-finish")
+    solver_finish.add_argument("challenge_id")
+
     status = sub.add_parser("status")
     status.add_argument("challenge_id")
 
@@ -113,6 +119,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.action == "status":
             emit(visible(store.load(args.challenge_id), settings))
+            return 0
+        if args.action == "solver-start":
+            emit(store.start_solver(args.challenge_id, args.terminal))
+            return 0
+        if args.action == "solver-finish":
+            emit(store.finish_solver(args.challenge_id))
             return 0
         if args.action == "import-local":
             description = args.description_file.read_text(encoding="utf-8") if args.description_file else ""
