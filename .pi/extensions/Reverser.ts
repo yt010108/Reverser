@@ -23,17 +23,17 @@ const AGENT_TOOLS: Record<AgentRole, string[]> = {
   solver: [
     "read", "write", "edit", "grep", "find", "ls",
     "reverser_status", "reverser_triage", "reverser_exec", "reverser_record_flag",
-    "reverser_recon", "reverser_hypothesis", "reverser_solution_search", "reverser_mark_unsolved",
+    "reverser_recon", "reverser_hypothesis", "reverser_mark_unsolved",
   ],
   reviewer: [
     "read", "write", "grep", "find", "ls", "reverser_status", "reverser_writeup",
-    "reverser_solution_search", "reverser_learn",
+    "reverser_learn",
   ],
 };
 
 function agentCommand(role: AgentRole, challengeId: string, context: AgentContext) {
   const args = [
-    "pi", "-p", "--no-session", "--approve",
+    "pi", "--no-session", "--approve",
     "--tools", AGENT_TOOLS[role].join(","),
     "--append-system-prompt", `.pi/agents/${role}.md`,
   ];
@@ -282,32 +282,36 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "reverser_record_flag", label: "CTF: 플래그 로컬 기록", description: "Store a flag only when it appears in a successful evidence run, then finish the Solver.",
     parameters: Type.Object({ challenge_id: Type.String(), value: Type.String(), evidence_run: Type.Integer({ minimum: 1 }) }),
-    async execute(_id, p, signal, _onUpdate, _ctx) {
+    async execute(_id, p, signal, _onUpdate, ctx) {
       const saved = await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run)], signal);
-      if (saved.exitCode === 0) await runCli(["solver-finish", p.challenge_id], signal);
+      if (saved.exitCode !== 0) return result(saved);
+      const finished = await runCli(["solver-finish", p.challenge_id], signal);
+      if (finished.exitCode !== 0) return result(finished);
+      ctx.shutdown();
       return result(saved);
     },
   });
   pi.registerTool({
     name: "reverser_writeup", label: "CTF: Reviewer 결과 저장", description: "Save the Reviewer output only inside the ignored challenge workspace.",
     parameters: Type.Object({ challenge_id: Type.String(), file: Type.String() }),
-    async execute(_id, p, signal, _onUpdate, _ctx) {
+    async execute(_id, p, signal, _onUpdate, ctx) {
       const saved = await runCli(["writeup", p.challenge_id, "--file", p.file], signal);
-      if (saved.exitCode === 0) await runCli(["reviewer-finish", p.challenge_id], signal);
+      if (saved.exitCode !== 0) return result(saved);
+      const finished = await runCli(["reviewer-finish", p.challenge_id], signal);
+      if (finished.exitCode !== 0) return result(finished);
+      ctx.shutdown();
       return result(saved);
     },
   });
   pi.registerTool({
-    name: "reverser_solution_search", label: "CTF: 로컬 풀이 방법 검색", description: "After 30 minutes, search only locally saved difficult-case notes.",
-    parameters: Type.Object({ challenge_id: Type.String(), query: Type.String() }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["solution-search", p.challenge_id, p.query], signal)); },
-  });
-  pi.registerTool({
     name: "reverser_mark_unsolved", label: "CTF: 미해결 기록", description: "Stop an unresolved attempt and record its blocker in progress.md.",
     parameters: Type.Object({ challenge_id: Type.String(), reason_file: Type.String() }),
-    async execute(_id, p, signal, _onUpdate, _ctx) {
+    async execute(_id, p, signal, _onUpdate, ctx) {
       const marked = await runCli(["unsolved", p.challenge_id, "--reason-file", p.reason_file], signal);
-      if (marked.exitCode === 0) await runCli(["solver-finish", p.challenge_id], signal);
+      if (marked.exitCode !== 0) return result(marked);
+      const finished = await runCli(["solver-finish", p.challenge_id], signal);
+      if (finished.exitCode !== 0) return result(finished);
+      ctx.shutdown();
       return result(marked);
     },
   });
@@ -328,12 +332,6 @@ export default function (pi: ExtensionAPI) {
       if (current.exitCode !== 0) return result(current);
       const context: AgentContext = { model: ctx.model, thinkingLevel: ctx.thinkingLevel };
       const handle = await openTerminal(solverTerminal, signal);
-      const sent = await pi.exec(orca, [
-        "terminal", "send", "--terminal", handle,
-        "--text", agentCommand("solver", p.challenge_id, context), "--enter", "--json",
-      ], { signal });
-      if (sent.code !== 0) return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
-      solverTerminal = handle;
       const tracked = await runCli(["solver-start", p.challenge_id, "--terminal", handle], signal);
       if (tracked.exitCode !== 0) return result(tracked);
       const path = (tracked.parsed as { path?: string } | undefined)?.path;
@@ -341,6 +339,16 @@ export default function (pi: ExtensionAPI) {
       watchJob("solver", p.challenge_id, path, (job) => {
         if (job.terminal) void launchReviewer(p.challenge_id, job.terminal, context);
       });
+      const sent = await pi.exec(orca, [
+        "terminal", "send", "--terminal", handle,
+        "--text", agentCommand("solver", p.challenge_id, context), "--enter", "--json",
+      ], { signal });
+      if (sent.code !== 0) {
+        await runCli(["terminate", p.challenge_id, "--reason", "solver_start_failed"]);
+        await runCli(["solver-finish", p.challenge_id]);
+        return { content: [{ type: "text" as const, text: sent.stderr || sent.stdout }], details: { handle }, isError: true };
+      }
+      solverTerminal = handle;
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
         details: { challengeId: p.challenge_id, terminal: handle },

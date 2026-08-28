@@ -147,7 +147,6 @@ class ChallengeStore:
             "created_at": utc_now(),
             "updated_at": utc_now(),
             "solve_started_at": None,
-            "research_started_at": None,
             "solved_at": None,
             "finished_at": None,
             "blocker": "",
@@ -156,7 +155,6 @@ class ChallengeStore:
             "flag_evidence": [],
             "artifacts": [],
             "tool_runs": [],
-            "solution_searches": [],
             "recon": None,
             "hypotheses": [],
         }
@@ -189,7 +187,6 @@ class ChallengeStore:
             f"- Target: `{state.get('architecture') or '-'} / {state.get('bits') or '-'}`",
             f"- Commands: `{len(tools)}`",
             f"- Elapsed: `{solve_elapsed_seconds(state)}s`",
-            f"- Research started: `{state.get('research_started_at') or '-'}`",
             f"- Updated: `{state['updated_at']}`",
         ]
         hypotheses = state.get("hypotheses", [])
@@ -236,11 +233,6 @@ class ChallengeStore:
                 append_hypothesis(root, 0)
         if state.get("blocker"):
             lines.extend(["", "## Blocker", "", str(state["blocker"])])
-        searches = state.get("solution_searches", [])
-        if searches:
-            lines.extend(["", "## Solution searches", ""])
-            for item in searches:
-                lines.append(f"- `{item.get('time', '-')}` {item.get('query', '')}")
         lines.extend(
             [
                 "",
@@ -274,6 +266,19 @@ class ChallengeStore:
     def start_solver(self, challenge_id: str, terminal: str) -> dict[str, Any]:
         self.load(challenge_id)
         path = self.challenge_dir(challenge_id) / "solver.json"
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("status") == "running":
+                raise RuntimeError("Solver is already running")
+        except (OSError, json.JSONDecodeError):
+            pass
+        running = 0
+        for job in self.root.rglob("solver.json"):
+            try:
+                running += json.loads(job.read_text(encoding="utf-8")).get("status") == "running"
+            except (OSError, json.JSONDecodeError):
+                pass
+        if running >= 2:
+            raise RuntimeError("At most two Solvers can run at once")
         value = {"challenge_id": challenge_id, "status": "running", "terminal": terminal, "result": None}
         atomic_write_json(path, value)
         return {**value, "path": str(path)}

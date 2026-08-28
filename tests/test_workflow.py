@@ -16,8 +16,6 @@ from reverser_harness.writeup import WriteupManager
 CONFIG = """
 [project]
 name = "test"
-[solve]
-research_after_seconds = 1800
 [images]
 core = "test/core:1"
 dynamic = "test/dynamic:1"
@@ -29,8 +27,6 @@ memory = "1g"
 cpus = "1"
 pids = 64
 max_output_bytes = 65536
-[memory]
-search_limit = 5
 """
 
 
@@ -73,7 +69,7 @@ class WorkflowTests(unittest.TestCase):
         projected = public_state(state)
         self.assertEqual(projected["flags"], ["SECRET"])
 
-    def test_solution_notes_are_only_for_researched_or_unsolved_challenges(self):
+    def test_solution_notes_are_only_for_unsolved_challenges(self):
         state = self.store.create(title="Memory Test", platform_url="")
         memory = TechniqueMemory(self.root, self.store)
         with self.assertRaises(MemoryError):
@@ -86,12 +82,13 @@ class WorkflowTests(unittest.TestCase):
             state["challenge_id"], "# Faster XOR\n\nUse a short Z3 model first.\n"
         )
         self.assertTrue(destination.is_file())
-        self.assertTrue(memory.search("XOR"))
 
     def test_solver_json_tracks_running_and_done(self):
         state = self.store.create(title="Tracked", platform_url="")
         running = self.store.start_solver(state["challenge_id"], "term-1")
         self.assertEqual(json.loads(Path(running["path"]).read_text(encoding="utf-8"))["status"], "running")
+        with self.assertRaises(RuntimeError):
+            self.store.start_solver(state["challenge_id"], "term-2")
         with self.assertRaises(RuntimeError):
             self.store.finish_solver(state["challenge_id"])
         state["status"] = "solved"
@@ -99,6 +96,17 @@ class WorkflowTests(unittest.TestCase):
         done = self.store.finish_solver(state["challenge_id"])
         self.assertEqual(done["result"], "solved")
         self.assertEqual(done["terminal"], "term-1")
+
+    def test_at_most_two_solvers_can_run(self):
+        states = [self.store.create(title=f"Solver {index}", platform_url="") for index in range(3)]
+        self.store.start_solver(states[0]["challenge_id"], "term-1")
+        self.store.start_solver(states[1]["challenge_id"], "term-2")
+        with self.assertRaises(RuntimeError):
+            self.store.start_solver(states[2]["challenge_id"], "term-3")
+        states[0]["status"] = "failed"
+        self.store.save(states[0])
+        self.store.finish_solver(states[0]["challenge_id"])
+        self.store.start_solver(states[2]["challenge_id"], "term-3")
 
     def test_reviewer_json_requires_saved_report(self):
         state = self.store.create(title="Reviewed", platform_url="")
@@ -193,20 +201,6 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("## Hypothesis tree", progress)
         self.assertIn("input is XORed", progress)
         self.assertLess(progress.index("  - `h3`"), progress.index("- `h2`"))
-
-    def test_solution_search_waits_for_budget_or_unsolved_status(self):
-        state = self.store.create(title="Search Test", platform_url="")
-        state["status"] = "solving"
-        state["solve_started_at"] = state["created_at"]
-        self.store.save(state)
-        memory = TechniqueMemory(self.root, self.store)
-        with self.assertRaises(MemoryError):
-            memory.search_for_challenge(state["challenge_id"], "xor", 1800, 5)
-        state["status"] = "unsolved"
-        self.store.save(state)
-        self.assertEqual(
-            memory.search_for_challenge(state["challenge_id"], "xor", 1800, 5), []
-        )
 
     def test_exec_needs_triage_but_no_user_approval(self):
         class Worker:

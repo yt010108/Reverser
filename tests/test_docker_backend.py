@@ -25,8 +25,6 @@ class DockerBackendTests(unittest.TestCase):
             (root / "config.toml").write_text("""
 [project]
 name="test"
-[solve]
-research_after_seconds=1800
 [images]
 core="test/core:1"
 dynamic="test/dynamic:1"
@@ -38,8 +36,6 @@ memory="1g"
 cpus="1"
 pids=64
 max_output_bytes=65536
-[memory]
-search_limit=5
 """, encoding="utf-8")
             challenge = root / "challenge"
             for name in ("original", "work", "output"):

@@ -40,7 +40,7 @@ class CliTests(unittest.TestCase):
         buffer = io.BytesIO()
         stdout = io.TextIOWrapper(buffer, encoding="cp949")
         with patch("reverser_harness.cli.sys.stdout", stdout), \
-             patch("reverser_harness.cli.Settings.load", return_value=SimpleNamespace(research_after_seconds=1800, project_name="Reverser", project_root="C:/Reverser")), \
+             patch("reverser_harness.cli.Settings.load", return_value=SimpleNamespace(project_name="Reverser", project_root="C:/Reverser")), \
              patch("reverser_harness.cli.ChallengeStore") as store:
             store.return_value.list.return_value = [{"title": "dash — test", "status": "imported"}]
             self.assertEqual(main(["list"]), 0)

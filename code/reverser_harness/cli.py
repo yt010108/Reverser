@@ -25,21 +25,14 @@ def emit(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2))
 
 
-# public_state에 research_after_seconds와 research_due 플래그를 더해 CLI 노출용 상태를 만듦
-def visible(state: dict[str, Any], settings: Settings) -> dict[str, Any]:
-    value = public_state(state)
-    value["research_after_seconds"] = settings.research_after_seconds
-    value["research_due"] = (
-        value["elapsed_seconds"] >= settings.research_after_seconds
-        and state.get("status") not in {"solved", "unsolved", "failed"}
-    )
-    return value
+def visible(state: dict[str, Any]) -> dict[str, Any]:
+    return public_state(state)
 
 
 def catalog(store: ChallengeStore, settings: Settings) -> dict[str, Any]:
     challenges = []
     for item in store.list():
-        state = visible(item, settings)
+        state = visible(item)
         challenges.append({
             key: state.get(key)
             for key in ("challenge_id", "title", "event", "status", "architecture", "bits", "updated_at", "elapsed_seconds")
@@ -126,10 +119,6 @@ def parser() -> argparse.ArgumentParser:
     terminate = sub.add_parser("terminate")
     terminate.add_argument("challenge_id")
     terminate.add_argument("--reason", required=True)
-    search = sub.add_parser("solution-search")
-    search.add_argument("challenge_id")
-    search.add_argument("query")
-    search.add_argument("--limit", type=int)
     learn = sub.add_parser("learn")
     learn.add_argument("challenge_id")
     learn.add_argument("--file", type=Path, required=True)
@@ -162,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
             emit(catalog(store, settings))
             return 0
         if args.action == "status":
-            state = visible(store.load(args.challenge_id), settings)
+            state = visible(store.load(args.challenge_id))
             state["workspace"] = str(store.challenge_dir(args.challenge_id))
             emit(state)
             return 0
@@ -199,19 +188,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "import-local":
             description = args.description_file.read_text(encoding="utf-8") if args.description_file else ""
             state = ChallengeImporter(store).import_local(title=args.title, files=args.file, platform_url=args.url, event=args.event, description=description)
-            emit(visible(state, settings))
+            emit(visible(state))
             return 0
         if args.action == "dashboard":
             emit({"dashboard": str(build_dashboard(store))})
-            return 0
-        if args.action == "solution-search":
-            local_results = TechniqueMemory(PROJECT_ROOT, store).search_for_challenge(
-                args.challenge_id,
-                args.query,
-                settings.research_after_seconds,
-                args.limit or settings.memory_search_limit,
-            )
-            emit({"local": local_results})
             return 0
         if args.action == "learn":
             emit({"saved_path": str(TechniqueMemory(PROJECT_ROOT, store).save_lesson(
@@ -222,21 +202,21 @@ def main(argv: list[str] | None = None) -> int:
         analyzer = Analyzer(store, DockerWorker(settings))
         if args.action == "triage":
             state, result = analyzer.triage(args.challenge_id)
-            emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr})
+            emit({"state": visible(state), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr})
         elif args.action == "exec":
             state, result = analyzer.run_command(args.challenge_id, args.profile, args.command, args.timeout, args.hypothesis)
-            emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "timed_out": result.timed_out, "truncated": result.truncated})
+            emit({"state": visible(state), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "timed_out": result.timed_out, "truncated": result.truncated})
         elif args.action == "flag":
             state = analyzer.record_flag(args.challenge_id, args.value, args.evidence_run)
-            emit({"state": visible(state, settings), "recorded": True})
+            emit({"state": visible(state), "recorded": True})
         elif args.action == "unsolved":
             state = analyzer.mark_unsolved(
                 args.challenge_id, args.reason_file.read_text(encoding="utf-8")
             )
-            emit(visible(state, settings))
+            emit(visible(state))
         elif args.action == "terminate":
             state = analyzer.terminate(args.challenge_id, args.reason)
-            emit(visible(state, settings))
+            emit(visible(state))
         elif args.action == "writeup":
             emit(WriteupManager(store).save(args.challenge_id, args.file.read_text(encoding="utf-8")))
         return 0
