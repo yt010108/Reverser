@@ -417,7 +417,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.registerTool({
     name: "reverser_solve", label: "CTF: Solver 터미널", description: "Open a Solver Pi in a separate Orca terminal and return immediately so the parent remains interactive.",
-    parameters: Type.Object({ challenge_id: Type.String() }),
+    parameters: Type.Object({ challenge_id: Type.String(), verify_model: Type.Optional(Type.String()) }),
     async execute(_id, p, signal, _onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
@@ -428,7 +428,8 @@ export default function (pi: ExtensionAPI) {
       ];
       if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);
       if (ctx.thinkingLevel) args.push("--thinking", ctx.thinkingLevel);
-      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}`));
+      const verifyModel = (p.verify_model ?? "").trim() || "gpt-5.6-luna";
+      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}\nVerification model: ${verifyModel}`));
       const splitArgs = ["terminal", "split"];
       if (solverTerminal) splitArgs.push("--terminal", solverTerminal);
       splitArgs.push("--direction", solverTerminal ? "horizontal" : "vertical", "--json");
@@ -455,7 +456,7 @@ export default function (pi: ExtensionAPI) {
       watchSolver(p.challenge_id, path);
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
-        details: { challengeId: p.challenge_id, terminal: handle },
+        details: { challengeId: p.challenge_id, terminal: handle, verifyModel },
       };
     },
   });
