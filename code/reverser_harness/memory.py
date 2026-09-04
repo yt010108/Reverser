@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from .security import contains_flag, slug
-from .storage import ChallengeStore, solve_elapsed_seconds
+from .storage import ChallengeStore, solve_elapsed_seconds, utc_now
 
 
 class MemoryError(ValueError):
@@ -48,13 +48,20 @@ class TechniqueMemory:
         path.write_text(body, encoding="utf-8", newline="\n")
         return path
 
-    # techniques 디렉터리에서 쿼리 포함 카드를 대소문자 무시로 검색 — 최신순, limit개까지
+    # techniques 디렉터리에서 쿼리 포함 카드를 대소문자 무시로 검색 — 수정 시각 최신순, limit개까지
     def search(self, query: str, limit: int = 5) -> list[dict[str, str]]:
         needle = query.strip().lower()
         if not needle:
             return []
+
+        def modified_key(path: Path) -> tuple[int, str]:
+            try:
+                return path.stat().st_mtime_ns, path.name
+            except OSError:
+                return 0, path.name
+
         hits: list[dict[str, str]] = []
-        for path in sorted(self.techniques_dir.glob("*.md"), reverse=True):
+        for path in sorted(self.techniques_dir.glob("*.md"), key=modified_key, reverse=True):
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
             except OSError:
@@ -74,9 +81,9 @@ class TechniqueMemory:
     ) -> list[dict[str, str]]:
         state = self.store.load(challenge_id)
         if state.get("status") != "unsolved" and solve_elapsed_seconds(state) < research_after_seconds:
-            raise MemoryError("Local search is allowed after 30 minutes or when unsolved")
+            raise MemoryError("Local search is allowed after the research budget or when unsolved")
         results = self.search(query, limit)
         searches = state.setdefault("solution_searches", [])
-        searches.append({"time": state.get("updated_at", ""), "query": query})
+        searches.append({"time": utc_now(), "query": query})
         self.store.save(state)
         return results
