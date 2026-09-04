@@ -161,12 +161,7 @@ py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID propose --claim "..." --te
 py -3 -m reverser_harness.cli exec CHALLENGE_ID --profile core --command "..." --hypothesis h1
 py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID resolve --hypothesis-id h1 --outcome rejected --evidence-run 1 --observation "..."
 py -3 -m reverser_harness.cli solution-search CHALLENGE_ID "xor validation loop"
-py -3 -m reverser_harness.cli dashboard
 ```
-
-## 대시보드
-
-`reverser_dashboard` 또는 `dashboard` 명령은 서버를 띄우지 않고 루트의 `dashboard.html` 하나를 생성한다. 이 파일에는 실제 플래그가 들어가지 않으며 Git에서도 제외된다.
 
 ## 테스트
 

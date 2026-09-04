@@ -343,6 +343,7 @@ export default function (pi: ExtensionAPI) {
       falsifier: Type.Optional(Type.String()), exhaustion: Type.Optional(Type.String()),
       outcome: Type.Optional(Type.Union([Type.Literal("confirmed"), Type.Literal("rejected"), Type.Literal("inconclusive")])),
       evidence_run: Type.Optional(Type.Integer({ minimum: 1 })), observation: Type.Optional(Type.String()),
+      verify_model: Type.Optional(Type.String()),
     }),
     async execute(_id, p, signal, _onUpdate, ctx) {
       const args = ["hypothesis", p.challenge_id, p.action];
@@ -358,10 +359,17 @@ export default function (pi: ExtensionAPI) {
       if (p.action === "propose") {
         if (!plannerModel && ctx.model) plannerModel = { provider: ctx.model.provider, id: ctx.model.id };
         plannerThinking ??= pi.getThinkingLevel();
-        for (const provider of [ctx.model?.provider, "openai-codex", "opencode"]) {
-          if (!provider) continue;
-          const model = ctx.modelRegistry.find(provider, "gpt-5.6-luna");
-          if (model && await pi.setModel(model)) { switched = true; break; }
+        const verifyId = (p.verify_model ?? "").trim() || "gpt-5.6-luna";
+        const slash = verifyId.indexOf("/");
+        if (slash > 0) {
+          const model = ctx.modelRegistry.find(verifyId.slice(0, slash), verifyId.slice(slash + 1));
+          if (model && await pi.setModel(model)) { switched = true; }
+        } else {
+          for (const provider of [ctx.model?.provider, "openai-codex", "opencode"]) {
+            if (!provider) continue;
+            const model = ctx.modelRegistry.find(provider, verifyId);
+            if (model && await pi.setModel(model)) { switched = true; break; }
+          }
         }
         if (switched) pi.setThinkingLevel("medium");
       } else if (plannerModel) {
@@ -406,10 +414,6 @@ export default function (pi: ExtensionAPI) {
     name: "reverser_learn", label: "CTF: 풀이 방법 저장", description: "Save a reusable solution note only for a researched or unsolved challenge; easy solves are rejected.",
     parameters: Type.Object({ challenge_id: Type.String(), file: Type.String() }),
     async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["learn", p.challenge_id, "--file", p.file], signal)); },
-  });
-  pi.registerTool({
-    name: "reverser_dashboard", label: "CTF: 대시보드", description: "Generate one local read-only dashboard.html file.", parameters: Type.Object({}),
-    async execute(_id, _p, signal, _onUpdate, _ctx) { return result(await runCli(["dashboard"], signal)); },
   });
   pi.registerTool({
     name: "reverser_solve", label: "CTF: Solver 터미널", description: "Open a Solver Pi in a separate Orca terminal and return immediately so the parent remains interactive.",

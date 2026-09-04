@@ -9,7 +9,6 @@ from typing import Any
 from . import __version__
 from .analysis import Analyzer
 from .config import PROFILES, Settings
-from .dashboard import build_dashboard
 from .docker_backend import BackendError, DockerWorker
 from .importer import ChallengeImporter
 from .memory import TechniqueMemory
@@ -100,7 +99,6 @@ def parser() -> argparse.ArgumentParser:
     learn.add_argument("challenge_id")
     learn.add_argument("--file", type=Path, required=True)
 
-    sub.add_parser("dashboard")
     return result
 
 
@@ -150,9 +148,6 @@ def main(argv: list[str] | None = None) -> int:
             state = ChallengeImporter(store).import_local(title=args.title, files=args.file, platform_url=args.url, event=args.event, description=description)
             emit(visible(state, settings))
             return 0
-        if args.action == "dashboard":
-            emit({"dashboard": str(build_dashboard(PROJECT_ROOT, store))})
-            return 0
         if args.action == "solution-search":
             local_results = TechniqueMemory(PROJECT_ROOT, store).search_for_challenge(
                 args.challenge_id,
@@ -187,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             state = analyzer.terminate(args.challenge_id, args.reason)
             emit(visible(state, settings))
         elif args.action == "writeup":
-            emit(WriteupManager(PROJECT_ROOT, store).save(args.challenge_id, args.file.read_text(encoding="utf-8")))
+            emit(WriteupManager(store).save(args.challenge_id, args.file.read_text(encoding="utf-8")))
         return 0
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

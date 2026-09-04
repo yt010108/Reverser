@@ -230,26 +230,27 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(updated["status"], status)
                 self.assertEqual(updated["exit_reason"], "agent_process_error")
 
-    def test_writeup_keeps_private_and_redacts_export(self):
+    def test_writeup_stays_in_runs_reports(self):
         state = self.store.create(title="Writeup Test", platform_url="https://ctf.example/challenge")
         flag = "TEST" + "{private-value}"
         state["flags"].append(flag)
         self.store.save(state)
-        paths = WriteupManager(self.root, self.store).save(state["challenge_id"], f"# Solve\n\nFlag: {flag}\n")
-        self.assertIn(flag, Path(paths["private"]).read_text(encoding="utf-8"))
-        self.assertNotIn(flag, Path(paths["public"]).read_text(encoding="utf-8"))
-        metadata = json.loads((Path(paths["export_dir"]) / "metadata.json").read_text(encoding="utf-8"))
-        self.assertNotIn("flags", metadata)
+        paths = WriteupManager(self.store).save(state["challenge_id"], f"# Solve\n\nFlag: {flag}\n")
+        saved = Path(paths["path"])
+        self.assertTrue(saved.is_file())
+        self.assertIn(flag, saved.read_text(encoding="utf-8"))
+        self.assertEqual(saved.parent.name, "reports")
+        self.assertEqual(saved.parent.parent.name, state["challenge_id"])
 
     def test_writeup_paths_do_not_collide_for_duplicate_titles(self):
         first = self.store.create(title="Same Title", platform_url="", event="Event")
         second = self.store.create(title="Same Title", platform_url="", event="Event")
-        manager = WriteupManager(self.root, self.store)
-        first_path = manager.save(first["challenge_id"], "# First")["export_dir"]
-        second_path = manager.save(second["challenge_id"], "# Second")["export_dir"]
+        manager = WriteupManager(self.store)
+        first_path = manager.save(first["challenge_id"], "# First")["path"]
+        second_path = manager.save(second["challenge_id"], "# Second")["path"]
         self.assertNotEqual(first_path, second_path)
-        self.assertEqual(Path(first_path).parent.name, "event")
-        self.assertEqual(Path(first_path).name, first["challenge_id"])
+        self.assertIn(first["challenge_id"], first_path)
+        self.assertIn(second["challenge_id"], second_path)
 
 
 if __name__ == "__main__":

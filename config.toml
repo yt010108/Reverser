@@ -13,3 +13,9 @@ memory = "4g"
 cpus = "2"
 pids = 512
 max_output_bytes = 2097152
+
+[solve]
+research_after_seconds = 1800
+
+[memory]
+search_limit = 5

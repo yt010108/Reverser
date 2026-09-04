@@ -47,3 +47,36 @@ class TechniqueMemory:
         )
         path.write_text(body, encoding="utf-8", newline="\n")
         return path
+
+    # techniques 디렉터리에서 쿼리 포함 카드를 대소문자 무시로 검색 — 최신순, limit개까지
+    def search(self, query: str, limit: int = 5) -> list[dict[str, str]]:
+        needle = query.strip().lower()
+        if not needle:
+            return []
+        hits: list[dict[str, str]] = []
+        for path in sorted(self.techniques_dir.glob("*.md"), reverse=True):
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if needle not in text.lower():
+                continue
+            idx = text.lower().find(needle)
+            snippet = text[max(0, idx - 120):idx + 240].strip().replace("\n", " ")
+            hits.append({"path": path.name, "snippet": snippet[:360]})
+            if len(hits) >= max(1, limit):
+                break
+        return hits
+
+    # 미해결이거나 research 예산을 넘긴 문제만 로컬 검색 허용 — gate 통과 못 하면 MemoryError
+    def search_for_challenge(
+        self, challenge_id: str, query: str, research_after_seconds: int, limit: int
+    ) -> list[dict[str, str]]:
+        state = self.store.load(challenge_id)
+        if state.get("status") != "unsolved" and solve_elapsed_seconds(state) < research_after_seconds:
+            raise MemoryError("Local search is allowed after 30 minutes or when unsolved")
+        results = self.search(query, limit)
+        searches = state.setdefault("solution_searches", [])
+        searches.append({"time": state.get("updated_at", ""), "query": query})
+        self.store.save(state)
+        return results

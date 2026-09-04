@@ -23,6 +23,8 @@ class Settings:
     cpus: str
     pids: int
     max_output_bytes: int
+    research_after_seconds: int
+    memory_search_limit: int
 
     # config.toml을 읽고 검증해 Settings 객체를 생성
     @classmethod
@@ -36,6 +38,8 @@ class Settings:
         project = raw.get("project", {})
         images = {str(key): str(value) for key, value in raw.get("images", {}).items()}
         limits = raw.get("limits", {})
+        solve = raw.get("solve", {})
+        memory_cfg = raw.get("memory", {})
         if set(images) != set(PROFILES):
             raise ConfigError("[images] must define core, dynamic, ghidra, and angr")
         image_pattern = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}")
@@ -51,5 +55,11 @@ class Settings:
             pids=max(64, min(2048, int(limits.get("pids", 512)))),
             max_output_bytes=max(
                 65_536, min(16_777_216, int(limits.get("max_output_bytes", 2_097_152)))
+            ),
+            research_after_seconds=max(
+                60, min(7200, int(solve.get("research_after_seconds", 1800)))
+            ),
+            memory_search_limit=max(
+                1, min(50, int(memory_cfg.get("search_limit", memory_cfg.get("memory_search_limit", 5))))
             ),
         )
