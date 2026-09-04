@@ -9,7 +9,7 @@ description: 가져온 리버싱 CTF 문제 하나를 독립 컨텍스트에서 
 
 0. 시작 시 검증용 서브 에이전트 모델을 입력받는다. 입력이 없으면 Parent에게 요청하고, 하드코딩된 Luna로 고정하지 않는다. 기본값은 Luna다.
 
-1. 먼저 `reverser_status`에서 `workspace`를 확인한다. `read`, `write`, `edit`, `grep`, `find`, `ls`는 이 workspace 내부에만 사용하고 다른 문제, 프로젝트 코드, `.pi`, 홈 디렉터리와 환경 파일은 보지 않는다.
+1. 시작 시 Docker worker가 켜져 있는지 먼저 확인한다. `reverser_triage` 1회 시도가 `Worker image is unavailable`·docker daemon 오류로 실패하면 같은 실패를 반복하지 말고 `reverser_mark_unsolved`에 'Docker 미실행, Docker를 켠 뒤 재시도 필요' 취지로 기록해 Parent에게 알리고 중단한다. Docker가 정상이면 `reverser_status`에서 `workspace`를 확인한다. `read`, `write`, `edit`, `grep`, `find`, `ls`는 이 workspace 내부에만 사용하고 다른 문제, 프로젝트 코드, `.pi`, 홈 디렉터리와 환경 파일은 보지 않는다.
 2. triage가 없으면 `reverser_triage`를 실행하고 초기 정찰로 형식, 보호 기법, 입력 지점, 비교 지점과 아직 모르는 연결을 좁힌다. 도구를 정해진 순서로 전부 실행하지 말고 현재 질문에 필요한 도구만 고른다.
 3. 가장 근거가 강한 가설 하나를 `reverser_hypothesis(action="propose")`로 기록한다. `claim`, `test`, `falsifier`, 유한한 검사 범위인 `exhaustion`을 모두 지정한다. 활성 가설이 있는 동안 다른 가설을 만들지 않는다.
 4. propose 후 시작 시 입력받은 검증 모델(기본값: Luna)로 전환되면 활성 `hypothesis_id`를 붙인 `reverser_exec`으로 선언한 범위만 검증한다. 새 가설을 만들거나 검사 범위를 임의로 넓히지 않는다.

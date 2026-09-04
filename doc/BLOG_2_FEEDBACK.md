@@ -581,7 +581,6 @@ solve rate만 보면 틀린 후보를 자신 있게 제출하는 문제를 놓�
 - ReCopilot 모델 전체와 별도의 graph database
 - IDA나 GDB의 상시 세션
 - 모델이 임의로 정한 confidence 점수
-- 서버 기반 실시간 dashboard
 - OpenTelemetry 전체 tracing
 - vector database와 embedding memory
 - 모델 추천에 따른 자동 도구 설치

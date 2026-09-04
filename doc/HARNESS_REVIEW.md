@@ -40,7 +40,6 @@
 - TUI에는 현재 도구, 성공·실패, 경과시간, 턴 수가 표시된다.
 - Ghidra 전체 디컴파일을 피하고 관심 함수만 묶어 요청한다.
 - 쉬운 문제의 모든 풀이를 무조건 메모리에 넣지 않고, 30분 초과·미해결 문제만 기법 카드 후보로 만든다.
-- 서버 없는 정적 `dashboard.html`만 생성한다.
 
 ### 현재 피드백 루프의 실제 한계
 
@@ -369,7 +368,7 @@ flowchart TD
 현재 규모에서 아래 기능은 이득보다 복잡도가 크다.
 
 - Muteki식 다중 모델 swarm, 2초 coordinator loop, intent lease
-- JSONL event bus와 SSE dashboard backend
+- JSONL event bus
 - OpenTelemetry/Phoenix 전체 tracing
 - 모델 제안만으로 Docker image에 도구 자동 설치
 - 모든 Pi conversation의 영구 저장·재주입
