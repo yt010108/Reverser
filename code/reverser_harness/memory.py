@@ -14,9 +14,8 @@ class MemoryError(ValueError):
 class TechniqueMemory:
     # project_root와 ChallengeStore로 TechniqueMemory 초기화 — 로컬 기법 인덱스 경로 설정
     def __init__(self, project_root: Path, store: ChallengeStore) -> None:
-        self.project_root = project_root.resolve()
         self.store = store
-        self.techniques_dir = self.project_root / "memory" / "techniques"
+        self.techniques_dir = project_root.resolve() / "memory" / "techniques"
         self.techniques_dir.mkdir(parents=True, exist_ok=True)
 
     # 미해결 문제의 재사용 기법을 memory/techniques/에 저장 — 플래그 포함은 거부

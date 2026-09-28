@@ -1,7 +1,6 @@
 """Locked, ephemeral Docker workers for CTF reversing."""
 
 import os
-import re
 import shutil
 import subprocess
 import uuid
@@ -67,7 +66,6 @@ class DockerWorker:
         challenge_dir: Path,
         command: str,
         timeout_seconds: int | None = None,
-        environment: dict[str, str] | None = None,
     ) -> CommandResult:
         if profile not in PROFILES:
             raise BackendError(f"Unknown worker profile: {profile}")
@@ -139,10 +137,6 @@ class DockerWorker:
                     "seccomp=unconfined",
                 ]
             )
-        for key, value in (environment or {}).items():
-            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key) or "\x00" in value:
-                raise BackendError(f"Invalid worker environment variable: {key}")
-            docker_command.extend(["-e", f"{key}={value}"])
         docker_command.extend(
             [image, "timeout", "--signal=TERM", f"{timeout}s", "bash", "-c", command]
         )
