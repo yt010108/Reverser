@@ -35,17 +35,18 @@ class PiOrchestrationTests(unittest.TestCase):
         self.assertIn('AGENT_TOOLS.solver.join(",")', solve_block)
         self.assertNotIn('await runPiAgent("solver"', solve_block)
         self.assertIn('runCli(["solver-start"', solve_block)
-        self.assertIn("verify_model: Type.Optional(Type.String())", solve_block)
-        self.assertIn('const verifyModel = (p.verify_model ?? "").trim() || "gpt-5.6-luna"', solve_block)
-        self.assertIn("Verification model: ${verifyModel}", solve_block)
-        self.assertIn("verifyModel },", solve_block)
+        self.assertNotIn("verify_model", solve_block)
+        self.assertIn('args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}`));', solve_block)
+        self.assertIn('if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);', solve_block)
+        self.assertIn('if (ctx.thinkingLevel) args.push("--thinking", ctx.thinkingLevel);', solve_block)
         self.assertIn('pi.sendMessage(', extension)
         self.assertIn('deliverAs: "followUp"', extension)
         self.assertIn('file?.toString() === "solver.json"', extension)
         self.assertIn('runCli(["solver-finish", p.challenge_id]', extension)
         self.assertIn('name: "reverser_hypothesis"', extension)
-        self.assertIn('"gpt-5.6-luna"', extension)
-        self.assertIn('await pi.setModel(model)', extension)
+        self.assertNotIn("gpt-5.6-luna", extension)
+        self.assertNotIn("pi.setModel(", extension)
+        self.assertNotIn("pi.setThinkingLevel(", extension)
         self.assertIn('"--hypothesis", p.hypothesis_id', extension)
         self.assertIn('event.type === "tool_execution_start"', extension)
         self.assertIn('event.type === "tool_execution_end"', extension)
@@ -67,8 +68,18 @@ class PiOrchestrationTests(unittest.TestCase):
         solver_prompt = (ROOT / ".pi" / "agents" / "solver.md").read_text(encoding="utf-8")
         self.assertIn("workspace 내부에만", solver_prompt)
         self.assertIn("falsifier", solver_prompt)
-        self.assertIn("Verification model", solver_prompt)
-        self.assertIn('verify_model="<Verification model>"', solver_prompt)
+        self.assertIn('reverser_hypothesis(action="propose")', solver_prompt)
+        self.assertNotIn("verify_model", solver_prompt)
+
+    def test_hypothesis_updates_without_model_or_thinking_changes(self):
+        extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")
+        hypothesis = extension.split('name: "reverser_hypothesis"', 1)[1].split(
+            'name: "reverser_record_flag"', 1
+        )[0]
+        self.assertIn('return result(await runCli(args, signal));', hypothesis)
+        self.assertNotIn("verify_model", hypothesis)
+        self.assertNotIn("setModel(", hypothesis)
+        self.assertNotIn("setThinkingLevel(", hypothesis)
 
     def test_parent_cannot_bypass_solver_layout_with_raw_orca_split(self):
         extension = (ROOT / ".pi" / "extensions" / "Reverser.ts").read_text(encoding="utf-8")

@@ -247,8 +247,6 @@ function result(value: CliResult) {
 
 export default function (pi: ExtensionAPI) {
   let solverTerminal: string | undefined;
-  let plannerModel: { provider: string; id: string } | undefined;
-  let plannerThinking: ReturnType<typeof pi.getThinkingLevel> | undefined;
   const solverWatchers = new Map<string, FSWatcher>();
 
   const watchSolver = (challengeId: string, path: string) => {
@@ -343,9 +341,8 @@ export default function (pi: ExtensionAPI) {
       falsifier: Type.Optional(Type.String()), exhaustion: Type.Optional(Type.String()),
       outcome: Type.Optional(Type.Union([Type.Literal("confirmed"), Type.Literal("rejected"), Type.Literal("inconclusive")])),
       evidence_run: Type.Optional(Type.Integer({ minimum: 1 })), observation: Type.Optional(Type.String()),
-      verify_model: Type.Optional(Type.String()),
     }),
-    async execute(_id, p, signal, _onUpdate, ctx) {
+    async execute(_id, p, signal, _onUpdate, _ctx) {
       const args = ["hypothesis", p.challenge_id, p.action];
       for (const [flag, value] of [
         ["--hypothesis-id", p.hypothesis_id], ["--claim", p.claim], ["--test", p.test],
@@ -353,33 +350,7 @@ export default function (pi: ExtensionAPI) {
         ["--observation", p.observation],
       ] as Array<[string, string | undefined]>) if (value) args.push(flag, value);
       if (p.evidence_run !== undefined) args.push("--evidence-run", String(p.evidence_run));
-      const updated = await runCli(args, signal);
-      if (updated.exitCode !== 0) return result(updated);
-      let switched = false;
-      if (p.action === "propose") {
-        if (!plannerModel && ctx.model) plannerModel = { provider: ctx.model.provider, id: ctx.model.id };
-        plannerThinking ??= pi.getThinkingLevel();
-        const verifyId = (p.verify_model ?? "").trim() || "gpt-5.6-luna";
-        const slash = verifyId.indexOf("/");
-        if (slash > 0) {
-          const model = ctx.modelRegistry.find(verifyId.slice(0, slash), verifyId.slice(slash + 1));
-          if (model && await pi.setModel(model)) { switched = true; }
-        } else {
-          for (const provider of [ctx.model?.provider, "openai-codex", "opencode"]) {
-            if (!provider) continue;
-            const model = ctx.modelRegistry.find(provider, verifyId);
-            if (model && await pi.setModel(model)) { switched = true; break; }
-          }
-        }
-        if (switched) pi.setThinkingLevel("medium");
-      } else if (plannerModel) {
-        const model = ctx.modelRegistry.find(plannerModel.provider, plannerModel.id);
-        switched = !!model && await pi.setModel(model);
-        if (plannerThinking) pi.setThinkingLevel(plannerThinking);
-      }
-      const response = result(updated);
-      if (!switched) response.content[0].text += `\n\n모델 전환 실패: 현재 모델을 유지합니다.`;
-      return response;
+      return result(await runCli(args, signal));
     },
   });
   pi.registerTool({
@@ -417,7 +388,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.registerTool({
     name: "reverser_solve", label: "CTF: Solver 터미널", description: "Open a Solver Pi in a separate Orca terminal and return immediately so the parent remains interactive.",
-    parameters: Type.Object({ challenge_id: Type.String(), verify_model: Type.Optional(Type.String()) }),
+    parameters: Type.Object({ challenge_id: Type.String() }),
     async execute(_id, p, signal, _onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
@@ -428,8 +399,7 @@ export default function (pi: ExtensionAPI) {
       ];
       if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);
       if (ctx.thinkingLevel) args.push("--thinking", ctx.thinkingLevel);
-      const verifyModel = (p.verify_model ?? "").trim() || "gpt-5.6-luna";
-      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}\nVerification model: ${verifyModel}`));
+      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}`));
       const splitArgs = ["terminal", "split"];
       if (solverTerminal) splitArgs.push("--terminal", solverTerminal);
       splitArgs.push("--direction", solverTerminal ? "horizontal" : "vertical", "--json");
@@ -456,7 +426,7 @@ export default function (pi: ExtensionAPI) {
       watchSolver(p.challenge_id, path);
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
-        details: { challengeId: p.challenge_id, terminal: handle, verifyModel },
+        details: { challengeId: p.challenge_id, terminal: handle },
       };
     },
   });
