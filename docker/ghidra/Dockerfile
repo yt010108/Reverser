@@ -1,4 +1,4 @@
-ARG CORE_IMAGE=local/reverser-core:0.1
+ARG CORE_IMAGE=local/yt010108-reverser-core:0.1
 FROM eclipse-temurin:21-jdk-jammy AS java
 
 FROM ${CORE_IMAGE}

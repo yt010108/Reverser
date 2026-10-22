@@ -28,7 +28,7 @@ def visible(state: dict[str, Any], settings: Settings) -> dict[str, Any]:
     value["research_after_seconds"] = settings.research_after_seconds
     value["research_due"] = (
         value["elapsed_seconds"] >= settings.research_after_seconds
-        and state.get("status") not in {"solved", "unsolved", "failed"}
+        and state.get("status") not in {"solved", "local_verified", "unsolved", "failed"}
     )
     return value
 
@@ -53,6 +53,8 @@ def parser() -> argparse.ArgumentParser:
     hypothesis.add_argument("challenge_id")
     hypothesis.add_argument("hypothesis_action", choices=("propose", "resolve"))
     hypothesis.add_argument("--hypothesis-id", default="")
+    hypothesis.add_argument("--parent-id", default="")
+    hypothesis.add_argument("--basis-run", type=int)
     hypothesis.add_argument("--claim", default="")
     hypothesis.add_argument("--test", default="")
     hypothesis.add_argument("--falsifier", default="")
@@ -77,10 +79,17 @@ def parser() -> argparse.ArgumentParser:
     execute.add_argument("--timeout", type=int)
     execute.add_argument("--hypothesis")
 
+    review_exec = sub.add_parser("review-exec")
+    review_exec.add_argument("challenge_id")
+    review_exec.add_argument("--profile", choices=sorted(PROFILES), required=True)
+    review_exec.add_argument("--command", required=True)
+    review_exec.add_argument("--timeout", type=int)
+
     flag = sub.add_parser("flag")
     flag.add_argument("challenge_id")
     flag.add_argument("--value", required=True)
     flag.add_argument("--evidence-run", type=int, required=True)
+    flag.add_argument("--kind", choices=("flag", "local_solution"), required=True)
     writeup = sub.add_parser("writeup")
     writeup.add_argument("challenge_id")
     writeup.add_argument("--file", type=Path, required=True)
@@ -132,7 +141,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "hypothesis":
             emit(store.update_hypothesis(
                 args.challenge_id, args.hypothesis_action,
-                hypothesis_id=args.hypothesis_id, claim=args.claim, test=args.test,
+                hypothesis_id=args.hypothesis_id, parent_id=args.parent_id, basis_run=args.basis_run,
+                claim=args.claim, test=args.test,
                 falsifier=args.falsifier, exhaustion=args.exhaustion, outcome=args.outcome,
                 evidence_run=args.evidence_run, observation=args.observation,
             ))
@@ -159,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.action == "learn":
             emit({"saved_path": str(TechniqueMemory(PROJECT_ROOT, store).save_lesson(
-                args.challenge_id, args.file.read_text(encoding="utf-8")
+                args.challenge_id, args.file.read_text(encoding="utf-8"), settings.research_after_seconds
             ))})
             return 0
 
@@ -170,8 +180,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.action == "exec":
             state, result = analyzer.run_command(args.challenge_id, args.profile, args.command, args.timeout, args.hypothesis)
             emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "timed_out": result.timed_out, "truncated": result.truncated})
+        elif args.action == "review-exec":
+            state, result = analyzer.review_command(args.challenge_id, args.profile, args.command, args.timeout)
+            emit({"state": visible(state, settings), "exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "timed_out": result.timed_out, "truncated": result.truncated})
         elif args.action == "flag":
-            state = analyzer.record_flag(args.challenge_id, args.value, args.evidence_run)
+            state = analyzer.record_flag(args.challenge_id, args.value, args.evidence_run, args.kind)
             emit({"state": visible(state, settings), "recorded": True})
         elif args.action == "unsolved":
             state = analyzer.mark_unsolved(

@@ -1,4 +1,4 @@
-"""Solution notes for unsolved challenges."""
+"""Solution notes for researched or unsolved challenges."""
 
 import re
 from pathlib import Path
@@ -14,16 +14,16 @@ class MemoryError(ValueError):
 class TechniqueMemory:
     # project_root와 ChallengeStore로 TechniqueMemory 초기화 — 로컬 기법 인덱스 경로 설정
     def __init__(self, project_root: Path, store: ChallengeStore) -> None:
-        self.project_root = project_root.resolve()
         self.store = store
-        self.techniques_dir = self.project_root / "memory" / "techniques"
+        self.techniques_dir = project_root.resolve() / "memory" / "techniques"
         self.techniques_dir.mkdir(parents=True, exist_ok=True)
 
-    # 미해결 문제의 재사용 기법을 memory/techniques/에 저장 — 플래그 포함은 거부
-    def save_lesson(self, challenge_id: str, content: str) -> Path:
+    # 미해결 또는 연구 단계 문제의 재사용 기법 저장 — 플래그 포함은 거부
+    def save_lesson(self, challenge_id: str, content: str, research_after_seconds: int = 1800) -> Path:
         state = self.store.load(challenge_id)
-        if state.get("status") != "unsolved":
-            raise MemoryError("Only unsolved challenges create solution notes")
+        if (state.get("status") != "unsolved" and not state.get("research_started_at")
+                and solve_elapsed_seconds(state) < research_after_seconds):
+            raise MemoryError("Only researched or unsolved challenges create solution notes")
         if not content.strip():
             raise MemoryError("Solution note is empty")
         if contains_flag(content):
@@ -85,5 +85,8 @@ class TechniqueMemory:
         results = self.search(query, limit)
         searches = state.setdefault("solution_searches", [])
         searches.append({"time": utc_now(), "query": query})
+        state["research_started_at"] = state.get("research_started_at") or utc_now()
+        if state.get("status") == "solving":
+            state["status"] = "researching"
         self.store.save(state)
         return results

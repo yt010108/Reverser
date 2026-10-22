@@ -41,15 +41,15 @@ Reverser/
 
 ```text
 Parent   : 문제 가져오기 → reverser_solve → 계속 명령 수신
-Solver   : entry/main 정찰 → flag 후보 기록 → 가설 트리 → 검증 → flag + evidence_run 저장
+Solver   : entry/main 정찰 → 근거 run → 가설 트리 → 검증 → flag 또는 local_solution + evidence_run 저장
            └─ 미해결/실패면 사유 저장
            → solver.json done
-Reviewer : 같은 Orca 터미널의 새 컨텍스트에서 자동 시작
+Reviewer : Parent가 reverser_review를 호출하면 별도 Pi 컨텍스트에서 시작
            → 근거·논리·효율·재사용 기법 검토
-           → solved: reports/writeup.md
+           → solved/local_verified: reports/writeup.md
            └─ unsolved/failed: reports/review.md
            → reviewer.json done
-Parent   : [Solver], [Reviewer] 완료 메시지만 follow-up 큐로 수신
+Parent   : [Solver] 완료 메시지를 follow-up 큐로 수신, 필요할 때 Reviewer 호출
 ```
 
 - 시작 시 Docker worker가 켜져 있는지 먼저 확인한다. 안켜져 있으면 사용자에게 켜달라고 요청한다.

@@ -1,4 +1,4 @@
-ARG CORE_IMAGE=local/reverser-core:0.1
+ARG CORE_IMAGE=local/yt010108-reverser-core:0.1
 FROM ${CORE_IMAGE}
 USER root
 RUN apt-get update \

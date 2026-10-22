@@ -51,9 +51,9 @@ Solver의 긴 풀이 컨텍스트와 출력은 Parent에 들어오지 않는다.
 
 ### Solver 가설 루프
 
-Solver는 초기 정찰 후 한 번에 하나의 가설만 다룬다. 가설에는 주장, 검사 방법, 반증 조건, 유한한 검사 범위를 기록한다. 가설을 세운 모델과 검증 모델을 교체하며, 검증 모델은 확장에서 교체할 수 있다. 현재 기본값은 Luna다.
+Solver는 초기 정찰 후 한 번에 하나의 가설만 다룬다. 가설에는 주장, 검사 방법, 반증 조건, 유한한 검사 범위, 정찰 근거 `basis_run`을 기록한다. 이전 가설을 구체화하면 `parent_id`로 연결하고, 반증된 가설 아래에는 새 가설을 만들 수 없다. 가설 제안과 검증에는 상속한 모델과 thinking 설정을 그대로 사용한다.
 
-검증 명령은 활성 `hypothesis_id`를 포함해야 하고, 결과는 `confirmed`, `rejected`, `inconclusive` 중 하나와 실제 run 근거로 마감한다. 마감 후 기존 모델로 복귀해 다음 가설을 세운다. 횟수 제한은 없다.
+검증 명령은 활성 `hypothesis_id`를 포함해야 하고, 결과는 `confirmed`, `rejected`, `inconclusive` 중 하나와 실제 run 근거로 마감한다. 마감 후 다음 가설을 세운다. 횟수 제한은 없다.
 
 `progress.md`에 현재 단계, 활성 가설, 검증 run, 종료된 가설 이력을 저장해 사용자가 바로 확인할 수 있다. Solver의 파일 도구는 `reverser_status`가 반환한 `workspace`만 보도록 프롬프트에서 제한한다. 이는 행동 지침이며 강제 샌드박스는 아니다.
 
@@ -72,7 +72,7 @@ Solver를 시작하면 문제 폴더의 `solver.json`을 다음처럼 기록한�
 }
 ```
 
-Write-up 저장이나 미해결 기록이 끝나면 `status`를 `done`으로, `result`를 `solved`, `unsolved`, `failed` 중 하나로 바꾼다. JSON은 임시 파일을 원자적으로 교체해 기록한다. Parent는 해당 폴더를 `fs.watch`로 감시하므로 주기적인 상태 조회 없이 변경 이벤트가 발생할 때만 JSON을 읽고 완료 메시지를 큐에 넣는다.
+Write-up 저장이나 미해결 기록이 끝나면 `status`를 `done`으로, `result`를 `solved`, `local_verified`, `unsolved`, `failed` 중 하나로 바꾼다. `local_verified`는 입력·키가 로컬에서 검증됐지만 실제 플래그는 얻지 못한 상태다. JSON은 임시 파일을 원자적으로 교체해 기록한다. Parent는 해당 폴더를 `fs.watch`로 감시한다.
 
 ## Playwright 브라우저
 
@@ -122,6 +122,8 @@ return path;
 
 `core`, `dynamic`부터 빌드하고 용량이 큰 `ghidra`, `angr`는 필요할 때 따로 빌드한다.
 
+이미지는 이 프로젝트 전용 `local/yt010108-reverser-*` 태그를 쓴다. `doctor`의 `core_ready`가 false이면 core를 다시 빌드한다. 이전의 `local/reverser-core:0.1` 태그는 다른 프로젝트 이미지와 겹쳐 `reverser-triage: command not found`를 일으킬 수 있다.
+
 ```powershell
 docker compose -f .\docker\compose.yaml build ghidra
 docker compose -f .\docker\compose.yaml build angr
@@ -147,7 +149,9 @@ runs/[EVENT/]<CHALLENGE_ID>/
 └── reports/
 ```
 
-event가 있으면 문제는 `runs/<EVENT>/<CHALLENGE_ID>/`, 없으면 `runs/<CHALLENGE_ID>/`에 저장한다. `progress.md`에 상태와 경과시간, 실행 기록, 가설 이력을 함께 저장한다. 실제 플래그와 비공개 write-up은 `runs/`에만 남고, 플래그를 제거한 결과만 `writeups/`에 저장한다.
+event가 있으면 문제는 `runs/<EVENT>/<CHALLENGE_ID>/`, 없으면 `runs/<CHALLENGE_ID>/`에 저장한다. `progress.md`에 상태와 경과시간, 실행 기록, 가설 이력을 함께 저장한다. 새 결과와 비공개 write-up은 `runs/`에만 남는다. 기존 `writeups/`는 과거 공개본이다.
+
+`reverser_record_flag`는 실제 플래그면 `kind=flag`, 로컬에서만 확인한 입력·키면 `kind=local_solution`을 요구한다. 둘 다 성공한 `evidence_run`에 연결되지만 후자는 `solved`가 되지 않는다. Reviewer는 완료된 문제에서도 `reverser_review_exec`으로 격리 재검증을 실행할 수 있다.
 
 ## 직접 CLI
 
@@ -157,9 +161,11 @@ py -3 -m reverser_harness.cli doctor
 py -3 -m reverser_harness.cli import-local --title rev1 --file C:\Downloads\rev1
 py -3 -m reverser_harness.cli list
 py -3 -m reverser_harness.cli status CHALLENGE_ID
-py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID propose --claim "..." --test "..." --falsifier "..." --exhaustion "..."
+py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID propose --basis-run 1 --claim "..." --test "..." --falsifier "..." --exhaustion "..."
 py -3 -m reverser_harness.cli exec CHALLENGE_ID --profile core --command "..." --hypothesis h1
-py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID resolve --hypothesis-id h1 --outcome rejected --evidence-run 1 --observation "..."
+py -3 -m reverser_harness.cli hypothesis CHALLENGE_ID resolve --hypothesis-id h1 --outcome rejected --evidence-run 2 --observation "..."
+py -3 -m reverser_harness.cli flag CHALLENGE_ID --value "..." --evidence-run 3 --kind local_solution
+py -3 -m reverser_harness.cli review-exec CHALLENGE_ID --profile dynamic --command "..."
 py -3 -m reverser_harness.cli solution-search CHALLENGE_ID "xor validation loop"
 ```
 

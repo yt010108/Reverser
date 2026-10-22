@@ -2,10 +2,10 @@
 name = "Reverser"
 
 [images]
-core = "local/reverser-core:0.1"
-dynamic = "local/reverser-dynamic:0.1"
-ghidra = "local/reverser-ghidra:0.1"
-angr = "local/reverser-angr:0.1"
+core = "local/yt010108-reverser-core:0.1"
+dynamic = "local/yt010108-reverser-dynamic:0.1"
+ghidra = "local/yt010108-reverser-ghidra:0.1"
+angr = "local/yt010108-reverser-angr:0.1"
 
 [limits]
 timeout_seconds = 900

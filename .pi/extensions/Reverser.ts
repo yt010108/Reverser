@@ -33,7 +33,7 @@ const AGENT_TOOLS: Record<AgentRole, string[]> = {
   ],
   reviewer: [
     "read", "write", "edit", "grep", "find", "ls",
-    "reverser_status", "reverser_exec", "reverser_record_flag", "reverser_writeup",
+    "reverser_status", "reverser_review_exec", "reverser_record_flag", "reverser_writeup",
     "reverser_solution_search", "reverser_mark_unsolved", "reverser_learn",
   ],
 };
@@ -46,7 +46,7 @@ function elapsedText(milliseconds: number) {
 
 function describeAgentTool(toolName: string, args: unknown) {
   const input = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
-  if (toolName === "reverser_exec") {
+  if (toolName === "reverser_exec" || toolName === "reverser_review_exec") {
     const command = typeof input.command === "string" ? input.command : "";
     let action = "분석 명령";
     if (/\b(?:r2|radare2|rabin2)\b/i.test(command)) action = "radare2 정적 분석";
@@ -65,7 +65,7 @@ function describeAgentTool(toolName: string, args: unknown) {
     case "reverser_triage": return "core · 정적 triage";
     case "reverser_status": return "문제 상태 확인";
     case "reverser_hypothesis": return "가설 상태 갱신";
-    case "reverser_record_flag": return "플래그 후보 로컬 기록";
+    case "reverser_record_flag": return "검증 결과 로컬 기록";
     case "reverser_writeup": return "Write-up 저장";
     case "reverser_solution_search": return "로컬 풀이 방법 검색";
     case "reverser_mark_unsolved": return "미해결 사유 기록";
@@ -247,8 +247,6 @@ function result(value: CliResult) {
 
 export default function (pi: ExtensionAPI) {
   let solverTerminal: string | undefined;
-  let plannerModel: { provider: string; id: string } | undefined;
-  let plannerThinking: ReturnType<typeof pi.getThinkingLevel> | undefined;
   const solverWatchers = new Map<string, FSWatcher>();
 
   const watchSolver = (challengeId: string, path: string) => {
@@ -286,7 +284,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|flag|hypothesis|unsolved|terminate|learn|solver-start|solver-finish)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|review-exec|flag|hypothesis|unsolved|terminate|learn|solver-start|solver-finish)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 reverser_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -339,56 +337,41 @@ export default function (pi: ExtensionAPI) {
     name: "reverser_hypothesis", label: "CTF: 가설", description: "Propose one falsifiable hypothesis or resolve the active hypothesis with a linked verification run.",
     parameters: Type.Object({
       challenge_id: Type.String(), action: Type.Union([Type.Literal("propose"), Type.Literal("resolve")]),
-      hypothesis_id: Type.Optional(Type.String()), claim: Type.Optional(Type.String()), test: Type.Optional(Type.String()),
+      hypothesis_id: Type.Optional(Type.String()), parent_id: Type.Optional(Type.String()), basis_run: Type.Optional(Type.Integer({ minimum: 1 })),
+      claim: Type.Optional(Type.String()), test: Type.Optional(Type.String()),
       falsifier: Type.Optional(Type.String()), exhaustion: Type.Optional(Type.String()),
       outcome: Type.Optional(Type.Union([Type.Literal("confirmed"), Type.Literal("rejected"), Type.Literal("inconclusive")])),
       evidence_run: Type.Optional(Type.Integer({ minimum: 1 })), observation: Type.Optional(Type.String()),
-      verify_model: Type.Optional(Type.String()),
     }),
-    async execute(_id, p, signal, _onUpdate, ctx) {
+    async execute(_id, p, signal, _onUpdate, _ctx) {
       const args = ["hypothesis", p.challenge_id, p.action];
       for (const [flag, value] of [
-        ["--hypothesis-id", p.hypothesis_id], ["--claim", p.claim], ["--test", p.test],
+        ["--hypothesis-id", p.hypothesis_id], ["--parent-id", p.parent_id],
+        ["--claim", p.claim], ["--test", p.test],
         ["--falsifier", p.falsifier], ["--exhaustion", p.exhaustion], ["--outcome", p.outcome],
         ["--observation", p.observation],
       ] as Array<[string, string | undefined]>) if (value) args.push(flag, value);
       if (p.evidence_run !== undefined) args.push("--evidence-run", String(p.evidence_run));
-      const updated = await runCli(args, signal);
-      if (updated.exitCode !== 0) return result(updated);
-      let switched = false;
-      if (p.action === "propose") {
-        if (!plannerModel && ctx.model) plannerModel = { provider: ctx.model.provider, id: ctx.model.id };
-        plannerThinking ??= pi.getThinkingLevel();
-        const verifyId = (p.verify_model ?? "").trim() || "gpt-5.6-luna";
-        const slash = verifyId.indexOf("/");
-        if (slash > 0) {
-          const model = ctx.modelRegistry.find(verifyId.slice(0, slash), verifyId.slice(slash + 1));
-          if (model && await pi.setModel(model)) { switched = true; }
-        } else {
-          for (const provider of [ctx.model?.provider, "openai-codex", "opencode"]) {
-            if (!provider) continue;
-            const model = ctx.modelRegistry.find(provider, verifyId);
-            if (model && await pi.setModel(model)) { switched = true; break; }
-          }
-        }
-        if (switched) pi.setThinkingLevel("medium");
-      } else if (plannerModel) {
-        const model = ctx.modelRegistry.find(plannerModel.provider, plannerModel.id);
-        switched = !!model && await pi.setModel(model);
-        if (plannerThinking) pi.setThinkingLevel(plannerThinking);
-      }
-      const response = result(updated);
-      if (!switched) response.content[0].text += `\n\n모델 전환 실패: 현재 모델을 유지합니다.`;
-      return response;
+      if (p.basis_run !== undefined) args.push("--basis-run", String(p.basis_run));
+      return result(await runCli(args, signal));
     },
   });
   pi.registerTool({
-    name: "reverser_record_flag", label: "CTF: 플래그 로컬 기록", description: "Require the candidate to appear in one successful tool run, then store it locally without submitting or echoing it.",
-    parameters: Type.Object({ challenge_id: Type.String(), value: Type.String(), evidence_run: Type.Integer({ minimum: 1 }) }),
-    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run)], signal)); },
+    name: "reverser_review_exec", label: "CTF: 사후 재검증", description: "Run an isolated verification command for a finished challenge without changing its result status.",
+    parameters: Type.Object({ challenge_id: Type.String(), profile: Type.Union([Type.Literal("core"), Type.Literal("dynamic"), Type.Literal("ghidra"), Type.Literal("angr")]), command: Type.String(), timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 7200 })) }),
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const args = ["review-exec", p.challenge_id, "--profile", p.profile, "--command", p.command];
+      if (p.timeout) args.push("--timeout", String(p.timeout));
+      return result(await runCli(args, signal));
+    },
   });
   pi.registerTool({
-    name: "reverser_writeup", label: "CTF: Write-up 저장", description: "Save an exact private write-up and a Git-safe public copy with known and flag-shaped values redacted.",
+    name: "reverser_record_flag", label: "CTF: 결과 로컬 기록", description: "Record an actual flag or a locally validated answer with a successful evidence run. A local answer does not mark the challenge solved.",
+    parameters: Type.Object({ challenge_id: Type.String(), value: Type.String(), evidence_run: Type.Integer({ minimum: 1 }), kind: Type.Union([Type.Literal("flag"), Type.Literal("local_solution")]) }),
+    async execute(_id, p, signal, _onUpdate, _ctx) { return result(await runCli(["flag", p.challenge_id, "--value", p.value, "--evidence-run", String(p.evidence_run), "--kind", p.kind], signal)); },
+  });
+  pi.registerTool({
+    name: "reverser_writeup", label: "CTF: Write-up 저장", description: "Save a private write-up inside the ignored challenge workspace.",
     parameters: Type.Object({ challenge_id: Type.String(), file: Type.String() }),
     async execute(_id, p, signal, _onUpdate, _ctx) {
       const saved = await runCli(["writeup", p.challenge_id, "--file", p.file], signal);
@@ -417,7 +400,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.registerTool({
     name: "reverser_solve", label: "CTF: Solver 터미널", description: "Open a Solver Pi in a separate Orca terminal and return immediately so the parent remains interactive.",
-    parameters: Type.Object({ challenge_id: Type.String(), verify_model: Type.Optional(Type.String()) }),
+    parameters: Type.Object({ challenge_id: Type.String() }),
     async execute(_id, p, signal, _onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
@@ -428,8 +411,7 @@ export default function (pi: ExtensionAPI) {
       ];
       if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);
       if (ctx.thinkingLevel) args.push("--thinking", ctx.thinkingLevel);
-      const verifyModel = (p.verify_model ?? "").trim() || "gpt-5.6-luna";
-      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}\nVerification model: ${verifyModel}`));
+      args.push(JSON.stringify(`CTF challenge_id: ${p.challenge_id}`));
       const splitArgs = ["terminal", "split"];
       if (solverTerminal) splitArgs.push("--terminal", solverTerminal);
       splitArgs.push("--direction", solverTerminal ? "horizontal" : "vertical", "--json");
@@ -456,18 +438,18 @@ export default function (pi: ExtensionAPI) {
       watchSolver(p.challenge_id, path);
       return {
         content: [{ type: "text" as const, text: "Orca 서브 터미널에서 Solver를 시작했습니다." }],
-        details: { challengeId: p.challenge_id, terminal: handle, verifyModel },
+        details: { challengeId: p.challenge_id, terminal: handle },
       };
     },
   });
   pi.registerTool({
-    name: "reverser_review", label: "CTF: 독립 Reviewer", description: "Review a solved, unsolved, or research-due challenge in a fresh Pi context. Active attempts under 30 minutes are skipped.",
+    name: "reverser_review", label: "CTF: 독립 Reviewer", description: "Review a solved, locally verified, unsolved, or research-due challenge in a fresh Pi context. Active attempts under 30 minutes are skipped.",
     parameters: Type.Object({ challenge_id: Type.String() }),
     async execute(_id, p, signal, onUpdate, ctx) {
       const current = await runCli(["status", p.challenge_id], signal);
       if (current.exitCode !== 0) return result(current);
       const state = current.parsed as { title?: string; status?: string; research_due?: boolean } | undefined;
-      const reviewable = state?.status === "solved" || state?.status === "unsolved" || state?.research_due === true;
+      const reviewable = state?.status === "solved" || state?.status === "local_verified" || state?.status === "unsolved" || state?.research_due === true;
       if (!reviewable) {
         return {
           content: [{ type: "text" as const, text: "Reviewer 조건이 아닙니다: 풀이 30분 이내의 활성 문제입니다." }],

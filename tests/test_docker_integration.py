@@ -13,10 +13,25 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 @unittest.skipUnless(
-    os.environ.get("HERMES_DOCKER_INTEGRATION") == "1",
-    "set HERMES_DOCKER_INTEGRATION=1 to exercise the local Docker image",
+    os.environ.get("REVERSER_DOCKER_INTEGRATION") == "1",
+    "set REVERSER_DOCKER_INTEGRATION=1 to exercise the local Docker image",
 )
 class DockerIntegrationTests(unittest.TestCase):
+    def test_angr_worker_imports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            challenge = Path(temporary) / "challenge"
+            for name in ("original", "work", "output"):
+                (challenge / name).mkdir(parents=True)
+            worker = DockerWorker(Settings.load(PROJECT_ROOT))
+            result = worker.run(
+                profile="angr",
+                challenge_dir=challenge,
+                command="python -c 'import angr; print(angr.__version__)'",
+                timeout_seconds=60,
+            )
+            self.assertEqual(result.exit_code, 0, result.stderr)
+            self.assertIn("9.2.213", result.stdout)
+
     def test_core_worker_mounts_and_triages_amd64_elf(self):
         with tempfile.TemporaryDirectory() as temporary:
             challenge = Path(temporary) / "challenge"

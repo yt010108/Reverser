@@ -27,6 +27,15 @@ class Analyzer:
             command="reverser-triage /challenge/input /challenge/output/triage.json",
             timeout_seconds=300,
         )
+        if result.exit_code != 0 or result.timed_out:
+            self._record_run(state, "triage", result)
+            state["status"] = "failed"
+            detail = result.stderr.strip() or result.stdout.strip() or "Triage failed"
+            if "reverser-triage: command not found" in detail:
+                detail = "Core worker image is missing reverser-triage; rebuild the Reverser core image"
+            state["blocker"] = detail
+            self.store.save(state)
+            raise AnalysisError(detail)
         triage_path = root / "output" / "triage.json"
         if not triage_path.is_file():
             raise AnalysisError(result.stderr.strip() or "Triage did not produce output")
@@ -46,9 +55,16 @@ class Analyzer:
         if primary:
             state["architecture"] = primary.get("architecture")
             state["bits"] = primary.get("bits")
-        state["status"] = "solving" if result.exit_code == 0 else "failed"
-        if result.exit_code == 0 and not state.get("solve_started_at"):
+        if state.get("status") in {"solved", "unsolved", "failed", "local_verified"}:
             state["solve_started_at"] = utc_now()
+            state["research_started_at"] = None
+            state["solved_at"] = None
+        elif not state.get("solve_started_at"):
+            state["solve_started_at"] = utc_now()
+        state["status"] = "solving"
+        state["blocker"] = ""
+        state["exit_reason"] = None
+        state["finished_at"] = None
         self._record_run(state, "triage", result)
         self.store.register_artifact(state, triage_path, "triage")
         self.store.save(state)
@@ -84,11 +100,34 @@ class Analyzer:
         self.store.save(state)
         return state, result
 
+    def review_command(
+        self, challenge_id: str, profile: str, command: str,
+        timeout_seconds: int | None = None,
+    ) -> tuple[dict[str, Any], CommandResult]:
+        if profile not in PROFILES:
+            raise AnalysisError(f"Unknown profile: {profile}")
+        state = self.store.load(challenge_id)
+        if state.get("status") not in {"solved", "local_verified", "unsolved", "failed"}:
+            raise AnalysisError("Review execution requires a finished challenge")
+        result = self.worker.run(
+            profile=profile,
+            challenge_dir=self.store.challenge_dir(challenge_id),
+            command=command,
+            timeout_seconds=timeout_seconds,
+        )
+        self._record_run(state, "review", result)
+        state["tool_runs"][-1]["phase"] = "review"
+        self.store.save(state)
+        return state, result
+
     def record_flag(
-        self, challenge_id: str, flag: str, evidence_run: int
+        self, challenge_id: str, flag: str, evidence_run: int, kind: str
     ) -> dict[str, Any]:
         state = self.store.load(challenge_id)
+        previous_status = state.get("status")
         value = flag.strip()
+        if kind not in {"flag", "local_solution"}:
+            raise AnalysisError("kind must be flag or local_solution")
         if not value or len(value) > 1024:
             raise AnalysisError("Invalid flag candidate")
         run = next(
@@ -103,6 +142,7 @@ class Analyzer:
             run is None
             or run.get("exit_code") != 0
             or run.get("timed_out", False)
+            or run.get("profile") == "triage"
         ):
             raise AnalysisError("Invalid evidence run")
         root = self.store.challenge_dir(challenge_id)
@@ -112,18 +152,31 @@ class Analyzer:
         )
         if value not in output:
             raise AnalysisError("Flag not found in evidence run")
-        if value not in state["flags"]:
-            state["flags"].append(value)
-        state["status"] = "solved"
-        state["solved_at"] = state.get("solved_at") or utc_now()
-        state["finished_at"] = state.get("finished_at") or state["solved_at"]
+        evidence = state.setdefault("result_evidence", [])
+        if not any(item.get("kind") == kind and item.get("value") == value and item.get("evidence_run") == evidence_run for item in evidence):
+            evidence.append({"kind": kind, "value": value, "evidence_run": evidence_run})
+        if kind == "flag":
+            if value not in state["flags"]:
+                state["flags"].append(value)
+            state["status"] = "solved"
+            state["solved_at"] = state.get("solved_at") or utc_now()
+            state["finished_at"] = state["solved_at"] if previous_status != "solved" else state.get("finished_at") or state["solved_at"]
+        else:
+            answers = state.setdefault("local_answers", [])
+            if value not in answers:
+                answers.append(value)
+            if state.get("status") != "solved":
+                state["status"] = "local_verified"
+                state["finished_at"] = state.get("finished_at") if previous_status == "local_verified" else utc_now()
+        state["blocker"] = ""
+        state["exit_reason"] = None
         self.store.save(state)
         return state
 
     def terminate(self, challenge_id: str, exit_reason: str) -> dict[str, Any]:
         state = self.store.load(challenge_id)
         state["exit_reason"] = exit_reason
-        if state.get("status") not in {"solved", "unsolved"}:
+        if state.get("status") not in {"solved", "local_verified", "unsolved"}:
             state["status"] = "failed"
             state["finished_at"] = state.get("finished_at") or utc_now()
         self.store.save(state)

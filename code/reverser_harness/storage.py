@@ -39,9 +39,10 @@ def atomic_write_json(path: Path, payload: Any) -> None:
 
 def public_state(state: dict[str, Any]) -> dict[str, Any]:
     """화면과 CLI에는 실제 플래그 값을 내보내지 않는다."""
-    private_keys = {"flags"}
-    result = {key: value for key, value in state.items() if key not in private_keys}
+    result = {key: value for key, value in state.items() if key not in {"flags", "local_answers", "result_evidence"}}
     result["flag_candidates"] = len(state.get("flags", []))
+    result["local_answer_count"] = len(state.get("local_answers", []))
+    result["result_runs"] = [item["evidence_run"] for item in state.get("result_evidence", [])]
     result["elapsed_seconds"] = solve_elapsed_seconds(state)
     return result
 
@@ -145,6 +146,8 @@ class ChallengeStore:
             "blocker": "",
             "exit_reason": None,
             "flags": [],
+            "local_answers": [],
+            "result_evidence": [],
             "artifacts": [],
             "tool_runs": [],
             "solution_searches": [],
@@ -176,18 +179,22 @@ class ChallengeStore:
             f"- Status: `{state['status']}`",
             f"- Target: `{state.get('architecture') or '-'} / {state.get('bits') or '-'}`",
             f"- Commands: `{len(tools)}`",
+            f"- Flag candidates: `{len(state.get('flags', []))}`",
+            f"- Local answers: `{len(state.get('local_answers', []))}`",
             f"- Elapsed: `{solve_elapsed_seconds(state)}s`",
             f"- Research started: `{state.get('research_started_at') or '-'}`",
             f"- Updated: `{state['updated_at']}`",
         ]
         hypotheses = state.get("hypotheses", [])
         active = next((item for item in hypotheses if item.get("status") == "testing"), None)
-        phase = "verify" if active else "hypothesize" if hypotheses else "recon"
+        phase = ("done" if state.get("status") in {"solved", "local_verified", "unsolved", "failed"}
+                 else "verify" if active else "hypothesize" if hypotheses else "recon")
         lines.extend(["", "## Solver", "", f"- Phase: `{phase}`"])
         if active:
             lines.extend([
                 "", "## Current hypothesis", "", f"### {clean(active.get('id', '-'))}",
                 f"- Claim: {clean(active.get('claim', ''))}",
+                f"- Parent: {clean(active.get('parent_id') or '-')} (basis run: {active.get('basis_run', '-')})",
                 f"- Test: {clean(active.get('test', ''))}",
                 f"- Falsifier: {clean(active.get('falsifier', ''))}",
                 f"- Exhaustion: {clean(active.get('exhaustion', ''))}",
@@ -197,9 +204,19 @@ class ChallengeStore:
         history = [item for item in hypotheses if item.get("status") != "testing"]
         if history:
             lines.extend(["", "## Hypothesis history", ""])
+            by_id = {item.get("id"): item for item in hypotheses}
             for item in history:
                 runs = ", ".join(map(str, item.get("evidence_runs", []))) or "-"
-                lines.append(f"- `{clean(item.get('id', '-'))}` `{clean(item.get('status', '-'))}` — {clean(item.get('claim', ''))} — {clean(item.get('observation', ''))} (runs: {runs})")
+                depth, parent = 0, item.get("parent_id")
+                while parent in by_id and depth < len(hypotheses):
+                    depth += 1
+                    parent = by_id[parent].get("parent_id")
+                lines.append(f"{'  ' * depth}- `{clean(item.get('id', '-'))}` `{clean(item.get('status', '-'))}` — {clean(item.get('claim', ''))} — {clean(item.get('observation', ''))} (basis: {item.get('basis_run', '-')}; runs: {runs})")
+        evidence = state.get("result_evidence", [])
+        if evidence:
+            lines.extend(["", "## Result evidence", ""])
+            for item in evidence:
+                lines.append(f"- `{clean(item.get('kind', '-'))}` from run {item.get('evidence_run', '-')} (value private)")
         if state.get("blocker"):
             lines.extend(["", "## Blocker", "", str(state["blocker"])])
         searches = state.get("solution_searches", [])
@@ -232,8 +249,7 @@ class ChallengeStore:
                 value = self.load(path.parent.name)
             except FileNotFoundError:
                 continue
-            if isinstance(value, dict):
-                items.append(value)
+            items.append(value)
         return sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)
 
     def start_solver(self, challenge_id: str, terminal: str) -> dict[str, Any]:
@@ -245,7 +261,7 @@ class ChallengeStore:
 
     def finish_solver(self, challenge_id: str) -> dict[str, Any]:
         result = str(self.load(challenge_id).get("status", ""))
-        if result not in {"solved", "unsolved", "failed"}:
+        if result not in {"solved", "local_verified", "unsolved", "failed"}:
             raise RuntimeError("Solver must record a terminal challenge state before finishing")
         path = self.challenge_dir(challenge_id) / "solver.json"
         try:
@@ -262,6 +278,8 @@ class ChallengeStore:
         action: str,
         *,
         hypothesis_id: str = "",
+        parent_id: str = "",
+        basis_run: int | None = None,
         claim: str = "",
         test: str = "",
         falsifier: str = "",
@@ -281,9 +299,15 @@ class ChallengeStore:
             values = [claim.strip(), test.strip(), falsifier.strip(), exhaustion.strip()]
             if any(not value or len(value) > 1000 for value in values):
                 raise ValueError("claim, test, falsifier, and exhaustion are required")
+            if basis_run not in {item.get("sequence") for item in state.get("tool_runs", [])}:
+                raise ValueError("A valid basis_run is required")
+            parent = next((item for item in hypotheses if item.get("id") == parent_id), None) if parent_id else None
+            if parent_id and (parent is None or parent.get("status") in {"testing", "rejected"}):
+                raise ValueError("parent_id must name a resolved, non-rejected hypothesis")
             active = {
                 "id": f"h{len(hypotheses) + 1}", "claim": values[0], "test": values[1],
                 "falsifier": values[2], "exhaustion": values[3], "status": "testing", "evidence_runs": [],
+                "parent_id": parent_id or None, "basis_run": basis_run,
             }
             hypotheses.append(active)
         elif action == "resolve":

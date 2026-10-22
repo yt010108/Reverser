@@ -87,6 +87,12 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(destination.is_file())
         self.assertTrue(memory.search("XOR"))
+        researched = self.store.create(title="Long solve", platform_url="")
+        researched["status"] = "solved"
+        researched["solve_started_at"] = "2026-01-01T00:00:00+00:00"
+        researched["finished_at"] = "2026-01-01T00:31:00+00:00"
+        self.store.save(researched)
+        self.assertTrue(memory.save_lesson(researched["challenge_id"], "# Slow method\n\nReuse this.\n").is_file())
 
     def test_solver_json_tracks_running_and_done(self):
         state = self.store.create(title="Tracked", platform_url="")
@@ -108,12 +114,13 @@ class WorkflowTests(unittest.TestCase):
         state = self.store.create(title="Hypothesis", platform_url="", event="Event")
         state["status"] = "solving"
         self.store.save(state)
+        analyzer = Analyzer(self.store, Worker())
+        analyzer.run_command(state["challenge_id"], "core", "inspect entry")
         proposed = self.store.update_hypothesis(
             state["challenge_id"], "propose", claim="input is XORed", test="trace three inputs",
-            falsifier="trace differs", exhaustion="all 16 bytes",
+            falsifier="trace differs", exhaustion="all 16 bytes", basis_run=1,
         )
         hypothesis_id = proposed["hypothesis"]["id"]
-        analyzer = Analyzer(self.store, Worker())
         with self.assertRaises(RuntimeError):
             analyzer.run_command(state["challenge_id"], "dynamic", "trace")
         updated, _ = analyzer.run_command(
@@ -124,6 +131,17 @@ class WorkflowTests(unittest.TestCase):
             state["challenge_id"], "resolve", hypothesis_id=hypothesis_id,
             outcome="confirmed", evidence_run=run, observation="trace matched",
         )
+        with self.assertRaisesRegex(ValueError, "basis_run"):
+            self.store.update_hypothesis(
+                state["challenge_id"], "propose", claim="ungrounded", test="check",
+                falsifier="no", exhaustion="one", basis_run=999,
+            )
+        child = self.store.update_hypothesis(
+            state["challenge_id"], "propose", parent_id=hypothesis_id, basis_run=run,
+            claim="XOR key depends on index", test="trace each index",
+            falsifier="key constant", exhaustion="all 16 bytes",
+        )
+        self.assertEqual(child["hypothesis"]["parent_id"], hypothesis_id)
         saved = self.store.load(state["challenge_id"])
         self.assertEqual(saved["hypotheses"][0]["status"], "confirmed")
         self.assertEqual(saved["hypotheses"][0]["evidence_runs"], [run])
@@ -196,16 +214,59 @@ class WorkflowTests(unittest.TestCase):
         )
         analyzer.run_command(state["challenge_id"], "core", "check")
         with self.assertRaises(RuntimeError):
-            analyzer.record_flag(state["challenge_id"], flag, 1)
+            analyzer.record_flag(state["challenge_id"], flag, 1, "flag")
         unchanged = self.store.load(state["challenge_id"])
         self.assertEqual(unchanged["status"], "solving")
         self.assertNotIn(flag, unchanged["flags"])
 
         analyzer.worker = Worker(CommandResult("core", "verify", 0, flag, ""))
         analyzer.run_command(state["challenge_id"], "core", "verify")
-        solved = analyzer.record_flag(state["challenge_id"], flag, 2)
+        solved = analyzer.record_flag(state["challenge_id"], flag, 2, "flag")
         self.assertEqual(solved["status"], "solved")
         self.assertNotIn("flags", public_state(solved))
+        self.assertNotIn("result_evidence", public_state(solved))
+        self.assertEqual(solved["result_evidence"][0]["evidence_run"], 2)
+
+    def test_local_solution_stays_distinct_and_reviewer_can_rerun(self):
+        class Worker:
+            def run(self, *, profile, command, **_kwargs):
+                return CommandResult(profile, command, 0, "Correct: key123", "")
+
+        state = self.store.create(title="Server flag", platform_url="")
+        state["status"] = "solving"
+        self.store.save(state)
+        analyzer = Analyzer(self.store, Worker())
+        analyzer.run_command(state["challenge_id"], "dynamic", "local check")
+        result = analyzer.record_flag(state["challenge_id"], "key123", 1, "local_solution")
+        self.assertEqual(result["status"], "local_verified")
+        self.assertEqual(result["flags"], [])
+        self.assertEqual(self.store.finish_solver(state["challenge_id"])["result"], "local_verified")
+        self.assertEqual(Path(WriteupManager(self.store).save(state["challenge_id"], "# Local solve")["path"]).name, "writeup.md")
+        reviewed, _ = analyzer.review_command(state["challenge_id"], "dynamic", "repeat check")
+        self.assertEqual(reviewed["status"], "local_verified")
+        self.assertEqual(reviewed["tool_runs"][-1]["phase"], "review")
+        self.assertNotIn("key123", str(public_state(reviewed)))
+
+    def test_failed_triage_ignores_stale_output_and_retry_clears_blocker(self):
+        class Worker:
+            result = CommandResult("core", "triage", 127, "", "reverser-triage: command not found")
+            def run(self, **_kwargs):
+                return self.result
+
+        state = self.store.create(title="Retry", platform_url="")
+        root = self.store.challenge_dir(state["challenge_id"])
+        (root / "output" / "triage.json").write_text('{"files":[]}', encoding="utf-8")
+        worker = Worker()
+        analyzer = Analyzer(self.store, worker)
+        with self.assertRaisesRegex(RuntimeError, "rebuild"):
+            analyzer.triage(state["challenge_id"])
+        failed = self.store.load(state["challenge_id"])
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["tool_runs"][-1]["exit_code"], 127)
+        worker.result = CommandResult("core", "triage", 0, "ok", "")
+        recovered, _ = analyzer.triage(state["challenge_id"])
+        self.assertEqual(recovered["status"], "solving")
+        self.assertEqual(recovered["blocker"], "")
 
     def test_failed_terminal_state_records_reason(self):
         state = self.store.create(title="Failed", platform_url="")

@@ -1,7 +1,6 @@
 """Locked, ephemeral Docker workers for CTF reversing."""
 
 import os
-import re
 import shutil
 import subprocess
 import uuid
@@ -52,11 +51,27 @@ class DockerWorker:
                 "available": result.returncode == 0,
                 "error": result.stderr.strip() if result.returncode else "",
             }
+        core = profiles["core"]
+        if core["available"]:
+            probe = subprocess.run(
+                [self.docker, "run", "--rm", "--pull=never", "--network", "none",
+                 "--entrypoint", "sh", self.settings.images["core"], "-c",
+                 "command -v reverser-triage >/dev/null"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                check=False,
+            )
+            core["ready"] = probe.returncode == 0
+            if probe.returncode:
+                core["error"] = "Core image is missing reverser-triage; rebuild with docker compose -f docker/compose.yaml build core"
         return {
             "docker": self.docker,
             "mode": "ephemeral-worker-per-command",
             "profiles": profiles,
-            "core_ready": bool(profiles["core"]["available"]),
+            "core_ready": bool(core["available"] and core.get("ready")),
         }
 
     # 격리 컨테이너를 1회용으로 띄워 명령 실행 — network none, read-only, cap-drop, pids/memory 제한, /challenge 마운트
@@ -67,7 +82,6 @@ class DockerWorker:
         challenge_dir: Path,
         command: str,
         timeout_seconds: int | None = None,
-        environment: dict[str, str] | None = None,
     ) -> CommandResult:
         if profile not in PROFILES:
             raise BackendError(f"Unknown worker profile: {profile}")
@@ -139,10 +153,6 @@ class DockerWorker:
                     "seccomp=unconfined",
                 ]
             )
-        for key, value in (environment or {}).items():
-            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key) or "\x00" in value:
-                raise BackendError(f"Invalid worker environment variable: {key}")
-            docker_command.extend(["-e", f"{key}={value}"])
         docker_command.extend(
             [image, "timeout", "--signal=TERM", f"{timeout}s", "bash", "-c", command]
         )

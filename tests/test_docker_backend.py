@@ -9,6 +9,25 @@ from reverser_harness.docker_backend import DockerWorker
 
 
 class DockerBackendTests(unittest.TestCase):
+    def test_doctor_detects_foreign_core_image_without_triage(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "config.toml").write_text("""
+[images]
+core="test/core:1"
+dynamic="test/dynamic:1"
+ghidra="test/ghidra:1"
+angr="test/angr:1"
+""", encoding="utf-8")
+            def fake_run(command, **_kwargs):
+                code = 127 if "run" in command else 0
+                return subprocess.CompletedProcess(command, code, "", "")
+            with patch("reverser_harness.docker_backend.shutil.which", return_value="docker"), patch("reverser_harness.docker_backend.subprocess.run", side_effect=fake_run):
+                report = DockerWorker(Settings.load(root)).doctor()
+            self.assertFalse(report["core_ready"])
+            self.assertTrue(report["profiles"]["core"]["available"])
+            self.assertIn("rebuild", report["profiles"]["core"]["error"])
+
     def test_ghidra_wrapper_reuses_project_and_limits_default_export(self):
         root = Path(__file__).resolve().parents[1]
         wrapper = (root / "docker" / "ghidra" / "reverser-ghidra").read_text(encoding="utf-8")

@@ -14,14 +14,20 @@ class CliTests(unittest.TestCase):
 
     def test_flag_requires_evidence_run(self):
         args = parser().parse_args(
-            ["flag", "abc-123", "--value", "flag", "--evidence-run", "7"]
+            ["flag", "abc-123", "--value", "flag", "--evidence-run", "7", "--kind", "flag"]
         )
         self.assertEqual(args.evidence_run, 7)
+        self.assertEqual(args.kind, "flag")
 
     def test_hypothesis_parser_keeps_cli_action(self):
         args = parser().parse_args(["hypothesis", "abc-123", "propose", "--claim", "xor"])
         self.assertEqual(args.action, "hypothesis")
         self.assertEqual(args.hypothesis_action, "propose")
+
+    def test_review_exec_has_its_own_action(self):
+        args = parser().parse_args(["review-exec", "abc-123", "--profile", "dynamic", "--command", "check"])
+        self.assertEqual(args.action, "review-exec")
+        self.assertEqual(args.profile, "dynamic")
 
     def test_main_uses_utf8_output(self):
         buffer = io.BytesIO()

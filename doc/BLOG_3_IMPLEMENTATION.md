@@ -1,5 +1,7 @@
 # [Project] Reverser 제작: 가설 검증 루프와 비동기 Reviewer 구현 - 3
 
+> 이 문서는 당시 설계 초안이다. 현재 실행 계약은 `README.md`와 코드에 있다. 현재는 별도 `reverser_recon` 도구와 가설 단계의 자동 모델 전환을 사용하지 않는다. 가설은 `basis_run`과 `parent_id`로 연결하며, 로컬 답안은 `local_verified`로 구분한다.
+
 2편에서는 Reverser의 피드백 구조를 다시 살펴봤다.
 
 Solver가 처음 세운 가설을 계속 붙잡는 문제, 분석 명령 실패와 전체 풀이 실패가 섞이는 문제, 플래그 후보와 실제 실행 근거가 연결되지 않는 문제를 정리했다. 이를 해결하기 위해 observation, fact, dead-end, Fresh Solver까지 여러 구조를 고려했다.

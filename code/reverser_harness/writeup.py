@@ -13,7 +13,7 @@ class WriteupManager:
         if not markdown.strip():
             raise ValueError("Write-up content is required")
         root = self.store.challenge_dir(challenge_id)
-        name = "writeup.md" if state.get("status") == "solved" else "review.md"
+        name = "writeup.md" if state.get("status") in {"solved", "local_verified"} else "review.md"
         path = root / "reports" / name
         path.write_text(markdown.rstrip() + "\n", encoding="utf-8", newline="\n")
         self.store.register_artifact(state, path, "reviewer-output")

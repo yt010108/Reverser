@@ -15,7 +15,6 @@ PROFILES = ("core", "dynamic", "ghidra", "angr")
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    project_root: Path
     project_name: str
     images: dict[str, str]
     timeout_seconds: int
@@ -46,7 +45,6 @@ class Settings:
         if any(not image_pattern.fullmatch(value) for value in images.values()):
             raise ConfigError("Invalid Docker image name")
         return cls(
-            project_root=root,
             project_name=str(project.get("name", "Reverser")),
             images=images,
             timeout_seconds=max(10, min(7200, int(limits.get("timeout_seconds", 900)))),
