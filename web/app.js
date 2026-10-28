@@ -492,6 +492,47 @@ function connectStream() {
   });
 }
 
+let sitePreview = null;
+async function previewChallengeSite() {
+  const form = $("newForm");
+  const url = form.elements.platform_url.value.trim();
+  if (!url || !form.elements.platform_url.checkValidity()) {
+    form.elements.platform_url.reportValidity();
+    return;
+  }
+  const button = $("previewSiteButton");
+  button.disabled = true;
+  setText("sitePreviewMessage", "문제 페이지를 읽는 중입니다...");
+  try {
+    const result = await api("/site/preview", { method: "POST", body: JSON.stringify({ url }) });
+    const old = sitePreview;
+    if (!form.elements.title.value.trim() || form.elements.title.value === old?.title) form.elements.title.value = result.title || "";
+    if (!form.elements.description.value.trim() || form.elements.description.value === old?.description) form.elements.description.value = result.description || "";
+    sitePreview = { url, title: result.title, description: result.description, files: result.files || [] };
+    const list = $("sitePreviewFiles");
+    list.replaceChildren();
+    list.hidden = !sitePreview.files.length;
+    if (sitePreview.files.length) {
+      const heading = document.createElement("strong");
+      heading.textContent = `첨부파일 후보 ${sitePreview.files.length}개 · 가져올 파일 선택`;
+      list.append(heading);
+      const slots = Math.max(0, 8 - (form.elements.files.files?.length || 0));
+      sitePreview.files.forEach((file, index) => {
+        const label = document.createElement("label");
+        const input = document.createElement("input"); input.type = "checkbox"; input.dataset.fileIndex = String(index); input.checked = index < slots;
+        const name = document.createElement("span"); name.textContent = file.name || file.url; name.title = file.url;
+        label.append(input, name); list.append(label);
+      });
+    }
+    setText("sitePreviewMessage", result.note || `제목·설명을 읽었습니다. ${sitePreview.files.length}개 파일 후보를 확인하세요.`);
+  } catch (error) {
+    sitePreview = null;
+    $("sitePreviewFiles").hidden = true;
+    setText("sitePreviewMessage", error.message);
+    toast(error.message);
+  } finally { button.disabled = false; }
+}
+
 async function createChallenge(event) {
   event.preventDefault();
   app.busy = true;
@@ -499,8 +540,13 @@ async function createChallenge(event) {
   submit.disabled = true;
   try {
     const body = new FormData($("newForm"));
+    const selected = sitePreview?.url === $("newForm").elements.platform_url.value.trim()
+      ? [...$("sitePreviewFiles").querySelectorAll('input[type="checkbox"]:checked')].map((input) => sitePreview.files[Number(input.dataset.fileIndex)])
+      : [];
+    body.set("site_files", JSON.stringify(selected));
     const challenge = await api("/challenges", { method: "POST", body });
     $("newDialog").close(); $("newForm").reset();
+    sitePreview = null; $("sitePreviewFiles").replaceChildren(); $("sitePreviewFiles").hidden = true;
     if (app.eventSource) { app.eventSource.close(); app.eventSource = null; }
     app.activities = []; app.activityCursor = 0; app.candidates = [];
     app.selectedSession = "main:0";
@@ -519,10 +565,13 @@ async function openSettings() {
     const form = $("settingsForm");
     form.elements.auth_mode.value = value.auth_mode;
     form.elements.oauth_model.value = value.oauth_model || "";
+    form.elements.chatgpt_model.value = value.chatgpt_model || "openai/gpt-6-sol";
     form.elements.api_model.value = value.api_model || "openai/gpt-5.1";
     form.elements.api_key.value = "";
     form.elements.clear_api_key.checked = false;
     setText("oauthState", value.oauth_ready ? "연결 가능" : value.oauth_available ? "다시 로그인 필요" : "인증 파일 없음");
+    setText("chatgptState", value.chatgpt_ready ? "연결됨" : value.chatgpt_available ? "다시 로그인 필요" : "연결 안 됨");
+    $("chatgptLoginButton").textContent = value.chatgpt_ready ? "ChatGPT 다시 연결" : "ChatGPT로 로그인";
     setText("apiKeyState", value.has_api_key ? "저장된 API 키가 있습니다." : "저장된 API 키가 없습니다.");
     showAuthFields();
     $("settingsDialog").showModal();
@@ -530,14 +579,80 @@ async function openSettings() {
 }
 
 function setModelLabel(value) {
-  const model = value.auth_mode === "oauth" ? value.oauth_model : value.api_model;
+  const model = value.auth_mode === "oauth" ? value.oauth_model : value.auth_mode === "chatgpt" ? value.chatgpt_model : value.api_model;
   setText("detailModel", model ? model.split("/").pop() : "기본 설정 따름");
 }
 
 function showAuthFields() {
   const mode = $("settingsForm").elements.auth_mode.value;
+  $("chatgptFields").hidden = mode !== "chatgpt";
   $("oauthFields").hidden = mode !== "oauth";
   $("apiFields").hidden = mode !== "api_key";
+}
+
+let chatgptPollTimer;
+let chatgptPopup;
+async function watchChatgptLogin() {
+  try {
+    const result = await api("/chatgpt/login/status");
+    if (result.status === "pending") {
+      chatgptPollTimer = setTimeout(watchChatgptLogin, 1500);
+      return;
+    }
+    $("chatgptLoginButton").disabled = false;
+    $("chatgptCancelButton").hidden = true;
+    $("chatgptAuthLink").hidden = true;
+    if (result.status === "ready") {
+      const value = await api("/config");
+      $("settingsForm").elements.auth_mode.value = "chatgpt";
+      setText("chatgptState", "연결됨");
+      setText("chatgptLoginMessage", "ChatGPT 연결이 완료되었습니다.");
+      $("chatgptLoginButton").textContent = "ChatGPT 다시 연결";
+      setModelLabel(value);
+      showAuthFields();
+      toast("ChatGPT 연결을 완료했습니다.");
+    } else if (result.status === "error") {
+      setText("chatgptLoginMessage", result.error || "로그인에 실패했습니다.");
+      toast("ChatGPT 로그인에 실패했습니다.");
+    }
+  } catch (error) {
+    $("chatgptLoginButton").disabled = false;
+    setText("chatgptLoginMessage", error.message);
+  }
+}
+
+async function startChatgptLogin() {
+  clearTimeout(chatgptPollTimer);
+  $("settingsForm").elements.auth_mode.value = "chatgpt";
+  showAuthFields();
+  $("chatgptLoginButton").disabled = true;
+  setText("chatgptLoginMessage", "ChatGPT 로그인 창을 준비하는 중입니다.");
+  try {
+    const result = await api("/chatgpt/login/start", { method: "POST" });
+    const link = $("chatgptAuthLink");
+    link.href = result.url;
+    link.hidden = false;
+    $("chatgptCancelButton").hidden = false;
+    setText("chatgptLoginMessage", "새 창에서 ChatGPT 로그인을 완료하세요. 창이 열리지 않았다면 로그인 창 열기를 누르세요.");
+    chatgptPopup = window.open(result.url, "_blank", "noopener");
+    watchChatgptLogin();
+  } catch (error) {
+    chatgptPopup?.close();
+    $("chatgptLoginButton").disabled = false;
+    setText("chatgptLoginMessage", error.message);
+    toast(error.message);
+  }
+}
+
+async function cancelChatgptLogin() {
+  clearTimeout(chatgptPollTimer);
+  try { await api("/chatgpt/login/cancel", { method: "POST" }); }
+  catch (error) { toast(error.message); return; }
+  chatgptPopup?.close();
+  $("chatgptLoginButton").disabled = false;
+  $("chatgptCancelButton").hidden = true;
+  $("chatgptAuthLink").hidden = true;
+  setText("chatgptLoginMessage", "로그인을 취소했습니다.");
 }
 
 async function saveSettings(event) {
@@ -546,6 +661,7 @@ async function saveSettings(event) {
   const body = {
     auth_mode: form.elements.auth_mode.value,
     oauth_model: form.elements.oauth_model.value.trim(),
+    chatgpt_model: form.elements.chatgpt_model.value.trim(),
     api_model: form.elements.api_model.value.trim(),
     api_key: form.elements.api_key.value.trim(),
     clear_api_key: form.elements.clear_api_key.checked,
@@ -597,6 +713,12 @@ async function sendChat(event) {
 function bind() {
   $("newButton").addEventListener("click", () => $("newDialog").showModal());
   $("emptyNewButton").addEventListener("click", () => $("newDialog").showModal());
+  $("previewSiteButton").addEventListener("click", previewChallengeSite);
+  $("newForm").elements.platform_url.addEventListener("input", () => {
+    sitePreview = null;
+    $("sitePreviewFiles").hidden = true;
+    setText("sitePreviewMessage", "URL을 읽으면 제목·설명·첨부파일 후보를 채웁니다. 가져온 내용은 수정할 수 있습니다.");
+  });
   $("tasksNav").addEventListener("click", () => select(null));
   $("backButton").addEventListener("click", () => select(null));
   $("sidebarToggle").addEventListener("click", toggleSidebar);
@@ -609,6 +731,8 @@ function bind() {
   $("cancelSettings").addEventListener("click", () => $("settingsDialog").close());
   $("settingsForm").addEventListener("submit", saveSettings);
   $("settingsForm").querySelectorAll('input[name="auth_mode"]').forEach((input) => input.addEventListener("change", showAuthFields));
+  $("chatgptLoginButton").addEventListener("click", startChatgptLogin);
+  $("chatgptCancelButton").addEventListener("click", cancelChatgptLogin);
   $("solveButton").addEventListener("click", () => solverAction(app.current?.solver?.state === "paused" ? "resume" : "solve"));
   $("stopButton").addEventListener("click", () => solverAction("stop"));
   $("chatForm").addEventListener("submit", sendChat);

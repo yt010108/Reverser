@@ -21,12 +21,13 @@ class ChallengeImporter:
         platform_url: str = "",
         event: str = "",
         description: str = "",
+        allow_empty: bool = False,
     ) -> dict[str, Any]:
         if platform_url:
             validate_http_url(platform_url)
         if not title.strip():
             raise ValueError("Challenge title is required")
-        if not files:
+        if not files and not allow_empty:
             raise ValueError("At least one local attachment is required")
         resolved = [path.expanduser().resolve() for path in files]
         missing = [str(path) for path in resolved if not path.is_file()]
@@ -41,6 +42,7 @@ class ChallengeImporter:
             for path in resolved:
                 self.store.add_original(state, path)
             if description.strip():
+                state["description"] = description.strip()
                 description_path = (
                     self.store.challenge_dir(state["challenge_id"])
                     / "original"

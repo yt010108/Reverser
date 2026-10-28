@@ -7,6 +7,7 @@ services:
       dockerfile: docker/web/Dockerfile
     ports:
       - "127.0.0.1:18880:8080"
+      - "127.0.0.1:1455:1455"
     environment:
       REVERSER_PROJECT_ROOT: /app
       REVERSER_RUNS_ROOT: /app/runs

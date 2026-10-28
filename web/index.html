@@ -101,8 +101,33 @@
     </div>
   </div>
 
-  <dialog id="newDialog" class="modal"><form id="newForm"><div class="modal-heading"><div><p class="eyebrow">새 작업</p><h2>리버싱 문제 추가</h2></div><button class="close-button" type="button" aria-label="닫기">×</button></div><label>문제 이름<input name="title" required maxlength="160" placeholder="예: rev-basic-1"></label><div class="form-row"><label>대회 이름 (선택)<input name="event" maxlength="100" placeholder="예: CTF 2026"></label><label>문제 URL (선택)<input name="platform_url" type="url" placeholder="https://..."></label></div><label>문제 설명<textarea name="description" rows="5" maxlength="20000" placeholder="문제에서 제공된 설명을 붙여 넣으세요."></textarea></label><label>문제 파일<input name="files" type="file" multiple required></label><p class="form-hint">최대 8개, 합계 128 MiB. 파일은 비공개 작업 공간에 저장됩니다.</p><div class="modal-actions"><button id="cancelNew" class="secondary" type="button">취소</button><button class="primary" type="submit">문제 만들기</button></div></form></dialog>
-  <dialog id="settingsDialog" class="modal"><form id="settingsForm"><div class="modal-heading"><div><p class="eyebrow">LLM</p><h2>모델 연결</h2></div><button class="close-button" type="button" aria-label="닫기">×</button></div><div class="auth-choice"><label><input type="radio" name="auth_mode" value="oauth"> 기존 Pi 로그인 <small id="oauthState"></small></label><label><input type="radio" name="auth_mode" value="api_key"> OpenAI API 키</label></div><div id="oauthFields"><label>Pi 모델 (선택)<input name="oauth_model" placeholder="비우면 Pi 기본 모델 사용"></label></div><div id="apiFields" hidden><label>모델<input name="api_model" placeholder="openai/gpt-5.1"></label><label>API 키<input name="api_key" type="password" autocomplete="off" placeholder="저장된 키가 있으면 비워 두어도 됩니다"></label><p id="apiKeyState" class="form-hint"></p><label class="checkbox"><input name="clear_api_key" type="checkbox"> 저장된 API 키 삭제</label></div><div class="modal-actions"><button id="cancelSettings" class="secondary" type="button">취소</button><button class="primary" type="submit">설정 저장</button></div></form></dialog>
+  <dialog id="newDialog" class="modal"><form id="newForm">
+    <div class="modal-heading"><div><p class="eyebrow">새 작업</p><h2>리버싱 문제 추가</h2></div><button class="close-button" type="button" aria-label="닫기">×</button></div>
+    <div class="site-import-row"><label>문제 URL (선택)<input name="platform_url" type="url" placeholder="https://ctf.example/challenges/rev"></label><button id="previewSiteButton" class="secondary" type="button">사이트에서 읽기</button></div>
+    <p id="sitePreviewMessage" class="form-hint">URL을 읽으면 제목·설명·첨부파일 후보를 채웁니다. 가져온 내용은 수정할 수 있습니다.</p>
+    <div id="sitePreviewFiles" class="site-preview-files" hidden></div>
+    <div class="form-row"><label>문제 이름<input name="title" required maxlength="160" placeholder="예: rev-basic-1"></label><label>대회 이름 (선택)<input name="event" maxlength="100" placeholder="예: CTF 2026"></label></div>
+    <label>문제 설명<textarea name="description" rows="5" maxlength="20000" placeholder="문제에서 제공된 설명을 붙여 넣으세요."></textarea></label>
+    <label>로컬 문제 파일 (선택)<input name="files" type="file" multiple></label>
+    <p class="form-hint">사이트 파일과 로컬 파일을 합쳐 최대 8개, 128 MiB. 로그인이나 자바스크립트가 필요한 페이지는 직접 입력·첨부해 주세요.</p>
+    <div class="modal-actions"><button id="cancelNew" class="secondary" type="button">취소</button><button class="primary" type="submit">문제 만들기</button></div>
+  </form></dialog>
+  <dialog id="settingsDialog" class="modal"><form id="settingsForm">
+    <div class="modal-heading"><div><p class="eyebrow">LLM</p><h2>모델 연결</h2></div><button class="close-button" type="button" aria-label="닫기">×</button></div>
+    <div class="auth-choice">
+      <label><input type="radio" name="auth_mode" value="chatgpt"> ChatGPT OAuth <small id="chatgptState"></small></label>
+      <label><input type="radio" name="auth_mode" value="oauth"> 기존 Pi 로그인 <small id="oauthState"></small></label>
+      <label><input type="radio" name="auth_mode" value="api_key"> OpenAI API 키</label>
+    </div>
+    <div id="chatgptFields" hidden>
+      <div class="chatgpt-connect"><button id="chatgptLoginButton" class="secondary" type="button">ChatGPT로 로그인</button><button id="chatgptCancelButton" class="secondary" type="button" hidden>로그인 취소</button><a id="chatgptAuthLink" href="#" target="_blank" rel="noopener" hidden>로그인 창 열기</a></div>
+      <p id="chatgptLoginMessage" class="form-hint">브라우저에서 로그인하면 이 설정에 자동으로 연결됩니다.</p>
+      <label>모델<input name="chatgpt_model" placeholder="openai/gpt-6-sol"></label>
+    </div>
+    <div id="oauthFields" hidden><label>Pi 모델 (선택)<input name="oauth_model" placeholder="비우면 Pi 기본 모델 사용"></label></div>
+    <div id="apiFields" hidden><label>모델<input name="api_model" placeholder="openai/gpt-5.1"></label><label>API 키<input name="api_key" type="password" autocomplete="off" placeholder="저장된 키가 있으면 비워 두어도 됩니다"></label><p id="apiKeyState" class="form-hint"></p><label class="checkbox"><input name="clear_api_key" type="checkbox"> 저장된 API 키 삭제</label></div>
+    <div class="modal-actions"><button id="cancelSettings" class="secondary" type="button">취소</button><button class="primary" type="submit">설정 저장</button></div>
+  </form></dialog>
   <dialog id="runDialog" class="modal log-modal"><div class="modal-heading"><div><p class="eyebrow">근거 실행</p><h2 id="runDialogTitle">실행 기록</h2></div><button id="closeRun" class="close-button" type="button" aria-label="닫기">×</button></div><pre id="runOutput"></pre></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
