@@ -1,6 +1,7 @@
 """Locked, ephemeral Docker workers for CTF reversing."""
 
 import os
+import json
 import shutil
 import subprocess
 import uuid
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import PROFILES, Settings
+from .security import validate_id
 
 
 class BackendError(RuntimeError):
@@ -101,13 +103,31 @@ class DockerWorker:
             raise BackendError(f"Worker image is unavailable: {image}")
 
         root = challenge_dir.resolve()
+        intent_id = os.environ.get("REVERSER_INTENT_ID", "").strip()
+        if intent_id:
+            validate_id(intent_id)
         original = (root / "original").resolve()
-        work = (root / "work").resolve()
-        output = (root / "output").resolve()
+        work_name = f"work/intents/{intent_id}" if intent_id else "work"
+        output_name = f"output/intents/{intent_id}" if intent_id else "output"
+        work = (root / work_name).resolve()
+        output = (root / output_name).resolve()
         if any(root not in path.parents for path in (original, work, output)):
             raise BackendError("Challenge workspace escapes its root")
         for path in (original, work, output):
             path.mkdir(parents=True, exist_ok=True)
+
+        runs_volume = os.environ.get("REVERSER_RUNS_VOLUME", "").strip()
+        shared_bind = os.environ.get("REVERSER_RUNS_SHARED_BIND", "") == "1"
+        if runs_volume and shared_bind:
+            raise BackendError("Choose one shared runs mount mode")
+        relative_path = ""
+        if runs_volume or shared_bind:
+            runs_root = Path(os.environ.get("REVERSER_RUNS_ROOT", "/app/runs")).resolve()
+            try:
+                relative_path = root.relative_to(runs_root).as_posix()
+            except ValueError as exc:
+                raise BackendError("Challenge is outside shared runs") from exc
+        host_runs = self._shared_bind_source() if shared_bind else ""
 
         timeout = max(1, min(7200, timeout_seconds or self.settings.timeout_seconds))
         name = f"reverser-{profile}-{uuid.uuid4().hex[:12]}"
@@ -135,15 +155,28 @@ class DockerWorker:
             "/tmp:rw,exec,size=1g,mode=1777",
             "--tmpfs",
             "/home/analyst:rw,exec,size=256m,mode=0700,uid=10001,gid=10001",
-            "--mount",
-            f"type=bind,source={original},target=/challenge/input,readonly",
-            "--mount",
-            f"type=bind,source={work},target=/challenge/work",
-            "--mount",
-            f"type=bind,source={output},target=/challenge/output",
-            "--workdir",
-            "/challenge/work",
         ]
+        for directory, target, readonly in (("original", "/challenge/input", True),
+                                            (work_name, "/challenge/work", False),
+                                            (output_name, "/challenge/output", False)):
+            if runs_volume:
+                mount = f"type=volume,source={runs_volume},volume-subpath={relative_path}/{directory},target={target}"
+            elif shared_bind:
+                mount = f"type=bind,source={host_runs}/{relative_path}/{directory},target={target}"
+            else:
+                mount = f"type=bind,source={root / directory},target={target}"
+            if readonly:
+                mount += ",readonly"
+            docker_command.extend(["--mount", mount])
+        if intent_id and os.environ.get("REVERSER_ROLE") == "verifier":
+            if runs_volume:
+                shared = f"type=volume,source={runs_volume},volume-subpath={relative_path}/work,target=/challenge/shared,readonly"
+            elif shared_bind:
+                shared = f"type=bind,source={host_runs}/{relative_path}/work,target=/challenge/shared,readonly"
+            else:
+                shared = f"type=bind,source={root / 'work'},target=/challenge/shared,readonly"
+            docker_command.extend(["--mount", shared])
+        docker_command.extend(["--workdir", "/challenge/work"])
         if profile == "dynamic":
             docker_command.extend(
                 [
@@ -196,6 +229,27 @@ class DockerWorker:
                 timed_out=True,
                 truncated=True,
             )
+
+    def _shared_bind_source(self) -> str:
+        """Resolve the host side of the web container's runs bind mount."""
+        container = os.environ.get("HOSTNAME") or os.uname().nodename
+        inspected = subprocess.run(
+            [self.docker, "inspect", container, "--format", "{{json .Mounts}}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=20, check=False,
+        )
+        if inspected.returncode:
+            raise BackendError("Cannot inspect the web container's runs mount")
+        try:
+            mounts = json.loads(inspected.stdout)
+        except json.JSONDecodeError as exc:
+            raise BackendError("Invalid web container mount metadata") from exc
+        runs_root = os.environ.get("REVERSER_RUNS_ROOT", "/app/runs")
+        match = next((item for item in mounts if item.get("Destination") == runs_root
+                      and item.get("Type") == "bind"), None)
+        if not match:
+            raise BackendError("Web runs directory is not a Docker bind mount")
+        return str(match["Source"]).rstrip("/")
 
     # 출력을 max_output_bytes로 자르고 truncate 플래그 반환
     def _clip(self, value: str) -> tuple[str, bool]:

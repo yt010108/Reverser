@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 import uuid
@@ -39,7 +40,18 @@ def atomic_write_json(path: Path, payload: Any) -> None:
 
 def public_state(state: dict[str, Any]) -> dict[str, Any]:
     """화면과 CLI에는 실제 플래그 값을 내보내지 않는다."""
-    result = {key: value for key, value in state.items() if key not in {"flags", "local_answers", "result_evidence"}}
+    secrets = [str(value) for key in ("flags", "local_answers") for value in state.get(key, []) if value]
+    def redact(value: Any) -> Any:
+        if isinstance(value, str):
+            for secret in secrets:
+                value = value.replace(secret, "[비공개 결과]")
+            return re.sub(r"\b[A-Za-z][A-Za-z0-9_]{0,31}\{[^}\r\n]{1,512}\}", "[비공개 결과]", value)
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        if isinstance(value, dict):
+            return {key: redact(item) for key, item in value.items()}
+        return value
+    result = redact({key: value for key, value in state.items() if key not in {"flags", "local_answers", "result_evidence"}})
     result["flag_candidates"] = len(state.get("flags", []))
     result["local_answer_count"] = len(state.get("local_answers", []))
     result["result_runs"] = [item["evidence_run"] for item in state.get("result_evidence", [])]
@@ -76,11 +88,16 @@ class ChallengeStore:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        self._locations: dict[str, Path] = {}
 
     def challenge_dir(self, challenge_id: str) -> Path:
         validate_id(challenge_id)
+        cached = self._locations.get(challenge_id)
+        if cached and cached.is_dir():
+            return cached
         direct = (self.root / challenge_id).resolve()
         if (direct / "progress.md").is_file():
+            self._locations[challenge_id] = direct
             return direct
         # search recursively for existing challenge (supports runs/<event>/<id>)
         root_resolved = self.root.resolve()
@@ -89,6 +106,7 @@ class ChallengeStore:
                 try:
                     candidate = path.parent.resolve()
                     candidate.relative_to(root_resolved)
+                    self._locations[challenge_id] = candidate
                     return candidate
                 except ValueError:
                     continue
@@ -99,6 +117,7 @@ class ChallengeStore:
                     resolved = candidate.resolve()
                     resolved.relative_to(root_resolved)
                     # ensure it's a challenge dir (has original/work/output subdirs or is under event)
+                    self._locations[challenge_id] = resolved
                     return resolved
                 except ValueError:
                     continue
@@ -128,6 +147,7 @@ class ChallengeStore:
             root = self.challenge_dir(challenge_id)
         for name in ("original", "work", "output", "reports"):
             (root / name).mkdir(parents=True)
+        self._locations[challenge_id] = root
         state: dict[str, Any] = {
             "challenge_id": challenge_id,
             "title": title.strip() or "Untitled challenge",
@@ -152,20 +172,25 @@ class ChallengeStore:
             "tool_runs": [],
             "solution_searches": [],
             "hypotheses": [],
+            "intents": [],
+            "facts": [],
         }
         self.save(state)
         return state
 
     def load(self, challenge_id: str) -> dict[str, Any]:
-        path = self.challenge_dir(challenge_id) / "progress.md"
+        return self._read_state(self.challenge_dir(challenge_id) / "progress.md")
+
+    @staticmethod
+    def _read_state(path: Path) -> dict[str, Any]:
         try:
             text = path.read_text(encoding="utf-8")
             payload = text.split("<!-- reverser-state\n", 1)[1].split("\n-->", 1)[0]
             value = json.loads(payload)
         except (OSError, IndexError, json.JSONDecodeError) as exc:
-            raise FileNotFoundError(f"Unknown or invalid challenge: {challenge_id}") from exc
+            raise FileNotFoundError(f"Unknown or invalid challenge: {path.parent.name}") from exc
         if not isinstance(value, dict):
-            raise FileNotFoundError(f"Invalid challenge state: {challenge_id}")
+            raise FileNotFoundError(f"Invalid challenge state: {path.parent.name}")
         return value
 
     def save(self, state: dict[str, Any]) -> None:
@@ -212,6 +237,16 @@ class ChallengeStore:
                     depth += 1
                     parent = by_id[parent].get("parent_id")
                 lines.append(f"{'  ' * depth}- `{clean(item.get('id', '-'))}` `{clean(item.get('status', '-'))}` — {clean(item.get('claim', ''))} — {clean(item.get('observation', ''))} (basis: {item.get('basis_run', '-')}; runs: {runs})")
+        intents = state.get("intents", [])
+        if intents:
+            lines.extend(["", "## Intent chain", ""])
+            for item in intents:
+                lines.append(f"- `{clean(item['id'])}` `{clean(item['status'])}` ← `{clean(item.get('parent_id') or '-')}`: {clean(item['summary'])}")
+        facts = state.get("facts", [])
+        if facts:
+            lines.extend(["", "## Facts", ""])
+            for item in facts:
+                lines.append(f"- `{clean(item['id'])}` ({clean(item.get('confidence', 'observed'))}, run {item['evidence_run']}): {clean(item['summary'])}")
         evidence = state.get("result_evidence", [])
         if evidence:
             lines.extend(["", "## Result evidence", ""])
@@ -246,9 +281,10 @@ class ChallengeStore:
         items = []
         for path in self.root.rglob("progress.md"):
             try:
-                value = self.load(path.parent.name)
+                value = self._read_state(path)
             except FileNotFoundError:
                 continue
+            self._locations[str(value["challenge_id"])] = path.parent.resolve()
             items.append(value)
         return sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)
 
@@ -277,6 +313,7 @@ class ChallengeStore:
         challenge_id: str,
         action: str,
         *,
+        intent_id: str = "",
         hypothesis_id: str = "",
         parent_id: str = "",
         basis_run: int | None = None,
@@ -290,7 +327,8 @@ class ChallengeStore:
     ) -> dict[str, Any]:
         state = self.load(challenge_id)
         hypotheses = state.setdefault("hypotheses", [])
-        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
+        active = next((item for item in hypotheses if item.get("status") == "testing"
+                       and (not intent_id or item.get("intent_id") == intent_id)), None)
         if action == "propose":
             if state.get("status") not in {"solving", "researching"}:
                 raise RuntimeError("Run triage before proposing a hypothesis")
@@ -307,7 +345,7 @@ class ChallengeStore:
             active = {
                 "id": f"h{len(hypotheses) + 1}", "claim": values[0], "test": values[1],
                 "falsifier": values[2], "exhaustion": values[3], "status": "testing", "evidence_runs": [],
-                "parent_id": parent_id or None, "basis_run": basis_run,
+                "parent_id": parent_id or None, "basis_run": basis_run, "intent_id": intent_id or None,
             }
             hypotheses.append(active)
         elif action == "resolve":
@@ -325,6 +363,61 @@ class ChallengeStore:
             raise ValueError("Unknown hypothesis action")
         self.save(state)
         return {"phase": "verify" if action == "propose" else "hypothesize", "hypothesis": active}
+
+    def add_intent(self, challenge_id: str, summary: str, parent_id: str = "") -> dict[str, Any]:
+        state = self.load(challenge_id)
+        if state.get("status") not in {"solving", "researching"}:
+            raise RuntimeError("Run triage before adding an intent")
+        summary = summary.strip()
+        if not summary or len(summary) > 1000:
+            raise ValueError("Intent summary is required (maximum 1000 characters)")
+        intents = state.setdefault("intents", [])
+        if parent_id and not any(item["id"] == parent_id for item in intents):
+            raise ValueError("Unknown parent intent")
+        intent = {"id": f"i{len(intents) + 1}", "summary": summary, "parent_id": parent_id or None,
+                  "status": "open", "created_at": utc_now(), "evidence_runs": []}
+        intents.append(intent)
+        self.save(state)
+        return intent
+
+    def finish_intent(self, challenge_id: str, intent_id: str, status: str, evidence_run: int | None = None) -> dict[str, Any]:
+        state = self.load(challenge_id)
+        intent = next((item for item in state.get("intents", []) if item["id"] == intent_id), None)
+        if intent is None or intent["status"] != "open":
+            raise ValueError("Unknown open intent")
+        if status not in {"done", "blocked"}:
+            raise ValueError("Intent status must be done or blocked")
+        if evidence_run is not None:
+            run = next((item for item in state.get("tool_runs", []) if item["sequence"] == evidence_run), None)
+            if run is None or run.get("intent_id") != intent_id:
+                raise ValueError("Evidence run must belong to the intent")
+            intent["evidence_runs"] = sorted(set([*intent.get("evidence_runs", []), evidence_run]))
+        intent["status"] = status
+        intent["finished_at"] = utc_now()
+        self.save(state)
+        return intent
+
+    def record_fact(self, challenge_id: str, summary: str, detail: str, evidence_run: int,
+                    intent_id: str = "", confidence: str = "observed") -> dict[str, Any]:
+        state = self.load(challenge_id)
+        if confidence not in {"observed", "inferred"}:
+            raise ValueError("Confidence must be observed or inferred")
+        if not summary.strip() or len(summary) > 1000 or len(detail) > 8000:
+            raise ValueError("Invalid fact summary or detail")
+        run = next((item for item in state.get("tool_runs", []) if item["sequence"] == evidence_run), None)
+        if run is None:
+            raise ValueError("Unknown evidence run")
+        if intent_id and not any(item["id"] == intent_id for item in state.get("intents", [])):
+            raise ValueError("Unknown intent")
+        if intent_id and run.get("intent_id") != intent_id:
+            raise ValueError("Evidence run must belong to the intent")
+        facts = state.setdefault("facts", [])
+        fact = {"id": f"f{len(facts) + 1}", "summary": summary.strip(), "detail": detail.strip(),
+                "confidence": confidence, "evidence_run": evidence_run, "intent_id": intent_id or None,
+                "created_at": utc_now()}
+        facts.append(fact)
+        self.save(state)
+        return fact
 
     def add_original(self, state: dict[str, Any], source: Path, name: str | None = None) -> Path:
         source = source.resolve()

@@ -1,6 +1,7 @@
 """Challenge triage and isolated worker command orchestration."""
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,7 @@ class Analyzer:
         command: str,
         timeout_seconds: int | None = None,
         hypothesis_id: str | None = None,
+        intent_id: str | None = None,
     ) -> tuple[dict[str, Any], CommandResult]:
         if profile not in PROFILES:
             raise AnalysisError(f"Unknown profile: {profile}")
@@ -84,11 +86,15 @@ class Analyzer:
         if state.get("status") not in {"solving", "researching"}:
             raise AnalysisError("Run triage before free-form analysis")
         hypotheses = state.get("hypotheses", [])
-        active = next((item for item in hypotheses if item.get("status") == "testing"), None)
-        if hypotheses and not active:
+        relevant = [item for item in hypotheses if item.get("intent_id") == intent_id] if intent_id else [
+            item for item in hypotheses if not item.get("intent_id")]
+        active = next((item for item in relevant if item.get("status") == "testing"), None)
+        if relevant and not active:
             raise AnalysisError("Propose the next hypothesis before running analysis")
         if active and active.get("id") != hypothesis_id:
             raise AnalysisError("Verification commands require the active hypothesis_id")
+        if intent_id and not any(item.get("id") == intent_id and item.get("status") == "open" for item in state.get("intents", [])):
+            raise AnalysisError("Unknown open intent")
         root = self.store.challenge_dir(challenge_id)
         result = self.worker.run(
             profile=profile,
@@ -96,7 +102,7 @@ class Analyzer:
             command=command,
             timeout_seconds=timeout_seconds,
         )
-        self._record_run(state, profile, result, hypothesis_id)
+        self._record_run(state, profile, result, hypothesis_id, intent_id)
         self.store.save(state)
         return state, result
 
@@ -107,7 +113,8 @@ class Analyzer:
         if profile not in PROFILES:
             raise AnalysisError(f"Unknown profile: {profile}")
         state = self.store.load(challenge_id)
-        if state.get("status") not in {"solved", "local_verified", "unsolved", "failed"}:
+        if (state.get("status") not in {"solved", "local_verified", "unsolved", "failed"}
+                and os.environ.get("REVERSER_ROLE") != "verifier"):
             raise AnalysisError("Review execution requires a finished challenge")
         result = self.worker.run(
             profile=profile,
@@ -115,7 +122,7 @@ class Analyzer:
             command=command,
             timeout_seconds=timeout_seconds,
         )
-        self._record_run(state, "review", result)
+        self._record_run(state, "review", result, intent_id=os.environ.get("REVERSER_INTENT_ID") or None)
         state["tool_runs"][-1]["phase"] = "review"
         self.store.save(state)
         return state, result
@@ -125,6 +132,31 @@ class Analyzer:
     ) -> dict[str, Any]:
         state = self.store.load(challenge_id)
         previous_status = state.get("status")
+        value = self.check_candidate(challenge_id, flag, evidence_run, kind)
+        evidence = state.setdefault("result_evidence", [])
+        if not any(item.get("kind") == kind and item.get("value") == value and item.get("evidence_run") == evidence_run for item in evidence):
+            evidence.append({"kind": kind, "value": value, "evidence_run": evidence_run})
+        if kind == "flag":
+            if value not in state["flags"]:
+                state["flags"].append(value)
+            state["status"] = "solved"
+            state["solved_at"] = state.get("solved_at") or utc_now()
+            state["finished_at"] = state["solved_at"] if previous_status != "solved" else state.get("finished_at") or state["solved_at"]
+        else:
+            answers = state.setdefault("local_answers", [])
+            if value not in answers:
+                answers.append(value)
+            if state.get("status") != "solved":
+                state["status"] = "local_verified"
+                state["finished_at"] = state.get("finished_at") if previous_status == "local_verified" else utc_now()
+        state["blocker"] = ""
+        state["exit_reason"] = None
+        self.store.save(state)
+        return state
+
+    def check_candidate(self, challenge_id: str, flag: str, evidence_run: int, kind: str) -> str:
+        """Require a successful, recorded run that actually contained the candidate."""
+        state = self.store.load(challenge_id)
         value = flag.strip()
         if kind not in {"flag", "local_solution"}:
             raise AnalysisError("kind must be flag or local_solution")
@@ -152,26 +184,7 @@ class Analyzer:
         )
         if value not in output:
             raise AnalysisError("Flag not found in evidence run")
-        evidence = state.setdefault("result_evidence", [])
-        if not any(item.get("kind") == kind and item.get("value") == value and item.get("evidence_run") == evidence_run for item in evidence):
-            evidence.append({"kind": kind, "value": value, "evidence_run": evidence_run})
-        if kind == "flag":
-            if value not in state["flags"]:
-                state["flags"].append(value)
-            state["status"] = "solved"
-            state["solved_at"] = state.get("solved_at") or utc_now()
-            state["finished_at"] = state["solved_at"] if previous_status != "solved" else state.get("finished_at") or state["solved_at"]
-        else:
-            answers = state.setdefault("local_answers", [])
-            if value not in answers:
-                answers.append(value)
-            if state.get("status") != "solved":
-                state["status"] = "local_verified"
-                state["finished_at"] = state.get("finished_at") if previous_status == "local_verified" else utc_now()
-        state["blocker"] = ""
-        state["exit_reason"] = None
-        self.store.save(state)
-        return state
+        return value
 
     def terminate(self, challenge_id: str, exit_reason: str) -> dict[str, Any]:
         state = self.store.load(challenge_id)
@@ -195,6 +208,7 @@ class Analyzer:
     def _record_run(
         self, state: dict[str, Any], label: str, result: CommandResult,
         hypothesis_id: str | None = None,
+        intent_id: str | None = None,
     ) -> None:
         root = self.store.challenge_dir(state["challenge_id"])
         sequence = len(state["tool_runs"]) + 1
@@ -216,4 +230,10 @@ class Analyzer:
         }
         if hypothesis_id:
             record["hypothesis_id"] = hypothesis_id
+        if intent_id:
+            record["intent_id"] = intent_id
+            for intent in state.get("intents", []):
+                if intent["id"] == intent_id:
+                    intent["evidence_runs"].append(sequence)
+                    break
         state["tool_runs"].append(record)

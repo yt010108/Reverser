@@ -46,6 +46,10 @@ class ChallengeImporter:
                     / "original"
                     / "description.md"
                 )
+                suffix = 1
+                while description_path.exists():
+                    description_path = description_path.with_name(f"description-{suffix}.md")
+                    suffix += 1
                 description_path.write_text(
                     description.rstrip() + "\n", encoding="utf-8", newline="\n"
                 )

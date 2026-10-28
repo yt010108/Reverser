@@ -1,5 +1,25 @@
 name: reverser
 services:
+  web:
+    image: local/yt010108-reverser-web:0.1
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+    ports:
+      - "127.0.0.1:18880:8080"
+    environment:
+      REVERSER_PROJECT_ROOT: /app
+      REVERSER_RUNS_ROOT: /app/runs
+      REVERSER_RUNS_SHARED_BIND: "1"
+      REVERSER_PRIVATE_DIR: /app/private
+      REVERSER_STATE_DB: /app/state/reverser.sqlite
+      REVERSER_PI_AUTH_SOURCE: /seed/pi-auth
+    volumes:
+      - ../runs:/app/runs
+      - ../.private/web:/app/private
+      - reverser_state:/app/state
+      - ${REVERSER_PI_AUTH_SOURCE:-../.private/pi-auth-seed}:/seed/pi-auth:ro
+      - /var/run/docker.sock:/var/run/docker.sock
   core:
     image: local/yt010108-reverser-core:0.1
     build:
@@ -22,3 +42,5 @@ services:
       context: ./angr
       args:
         CORE_IMAGE: local/yt010108-reverser-core:0.1
+volumes:
+  reverser_state:

@@ -21,6 +21,22 @@ Reverser/
 
 ## 실행
 
+### Docker 웹 작업실
+
+Docker Desktop을 켜고 아래처럼 실행한다. 기존 Pi 로그인을 쓰려면 `docker/.env.example`을 참고해 `docker/.env`에 `REVERSER_PI_AUTH_SOURCE`를 지정한다. API 키 방식은 웹의 모델 설정에서 선택하고 키를 저장하면 된다. 두 방식 중 하나를 선택할 수 있다.
+
+```powershell
+docker compose -f docker/compose.yaml build core dynamic web
+docker compose -f docker/compose.yaml up -d web
+```
+
+웹 주소는 [http://127.0.0.1:18880](http://127.0.0.1:18880)이다. 파일과 설명을 등록하고 풀이를 시작하면 정찰 뒤 플래너가 의도를 만들고, 의도별 작업자가 격리 Docker 작업자에서 분석한다. 세션 탭에서 메인 에이전트·플래너·작업자·시스템 기록을 확인하고, 탐색 경로에서 의도·사실·가설·후보를 볼 수 있다. 작업은 일시정지·재개할 수 있고 후보는 별도 검증 실행을 거쳐야 해결로 표시된다. 플래그 자동 제출은 하지 않는다.
+
+인증 설정과 원본·분석 파일은 기존 `.private/web/`, `runs/`에 남고 Git에서 제외된다. 세션 활동과 작업 상태는 Docker의 `reverser_state` 볼륨에 저장된다. 웹 서버는 로컬 주소에만 열리며 Docker 소켓으로 네트워크 없는 격리 작업자를 띄운다.
+모델 설정에 `다시 로그인 필요`가 보이면 호스트 터미널에서 `pi`를 열고 `/login`으로 OpenAI Codex에 다시 로그인한다. 다음 요청부터 새 로그인 파일을 웹 컨테이너에 반영한다.
+
+### Pi 터미널
+
 ```powershell
 cd C:\Users\ytyt\Desktop\security\Reverser
 docker compose -f .\docker\compose.yaml build core dynamic

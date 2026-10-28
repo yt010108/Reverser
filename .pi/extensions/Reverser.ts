@@ -30,6 +30,7 @@ const AGENT_TOOLS: Record<AgentRole, string[]> = {
     "read", "write", "edit", "grep", "find", "ls",
     "reverser_status", "reverser_triage", "reverser_exec", "reverser_record_flag",
     "reverser_hypothesis", "reverser_writeup", "reverser_solution_search", "reverser_mark_unsolved", "reverser_learn",
+    "reverser_intent", "reverser_fact",
   ],
   reviewer: [
     "read", "write", "edit", "grep", "find", "ls",
@@ -65,6 +66,8 @@ function describeAgentTool(toolName: string, args: unknown) {
     case "reverser_triage": return "core · 정적 triage";
     case "reverser_status": return "문제 상태 확인";
     case "reverser_hypothesis": return "가설 상태 갱신";
+    case "reverser_intent": return "의도 체인 갱신";
+    case "reverser_fact": return "근거 사실 기록";
     case "reverser_record_flag": return "검증 결과 로컬 기록";
     case "reverser_writeup": return "Write-up 저장";
     case "reverser_solution_search": return "로컬 풀이 방법 검색";
@@ -284,7 +287,7 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
     const input = event.input as { command?: unknown };
     const command = typeof input.command === "string" ? input.command : "";
-    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|review-exec|flag|hypothesis|unsolved|terminate|learn|solver-start|solver-finish)/i;
+    const bypass = /(?:^|[;&|\s])(?:docker(?:\.exe)?\s+(?:run|exec|compose)|orca(?:\.exe)?\s+terminal\s+(?:split|create)|gdb|gdbserver|r2|radare2|ghidra(?:-headless)?|frida|strace|ltrace|angr|reverser-triage)(?:\s|$)|reverser_harness(?:\.cli)?\s+(?:triage|exec|review-exec|flag|hypothesis|intent|fact|unsolved|terminate|learn|solver-start|solver-finish)/i;
     if (bypass.test(command)) return { block: true, reason: "CTF 실행과 상태 변경은 격리·기록을 적용하는 reverser_* 전용 도구로 수행해야 합니다." };
     return undefined;
   });
@@ -325,11 +328,12 @@ export default function (pi: ExtensionAPI) {
   });
   pi.registerTool({
     name: "reverser_exec", label: "CTF: 격리 실행", description: "Run a command immediately in a fresh networkless worker after triage; never run challenge binaries on the host.",
-    parameters: Type.Object({ challenge_id: Type.String(), profile: Type.Union([Type.Literal("core"), Type.Literal("dynamic"), Type.Literal("ghidra"), Type.Literal("angr")]), command: Type.String(), timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 7200 })), hypothesis_id: Type.Optional(Type.String()) }),
+    parameters: Type.Object({ challenge_id: Type.String(), profile: Type.Union([Type.Literal("core"), Type.Literal("dynamic"), Type.Literal("ghidra"), Type.Literal("angr")]), command: Type.String(), timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 7200 })), hypothesis_id: Type.Optional(Type.String()), intent_id: Type.Optional(Type.String()) }),
     async execute(_id, p, signal, _onUpdate, _ctx) {
       const args = ["exec", p.challenge_id, "--profile", p.profile, "--command", p.command];
       if (p.timeout) args.push("--timeout", String(p.timeout));
       if (p.hypothesis_id) args.push("--hypothesis", p.hypothesis_id);
+      if (p.intent_id) args.push("--intent-id", p.intent_id);
       return result(await runCli(args, signal));
     },
   });
@@ -357,7 +361,90 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerTool({
-    name: "reverser_review_exec", label: "CTF: 사후 재검증", description: "Run an isolated verification command for a finished challenge without changing its result status.",
+    name: "reverser_intent", label: "CTF: 의도 체인", description: "Add an analysis intent, optionally under a parent intent, or finish an open intent with its evidence run.",
+    parameters: Type.Object({
+      challenge_id: Type.String(), action: Type.Union([Type.Literal("add"), Type.Literal("finish")]),
+      summary: Type.Optional(Type.String()), parent_id: Type.Optional(Type.String()),
+      intent_id: Type.Optional(Type.String()), status: Type.Optional(Type.Union([Type.Literal("done"), Type.Literal("blocked")])),
+      evidence_run: Type.Optional(Type.Integer({ minimum: 1 })),
+    }),
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const args = ["intent", p.challenge_id, p.action];
+      if (p.summary) args.push("--summary", p.summary);
+      if (p.parent_id) args.push("--parent-id", p.parent_id);
+      if (p.intent_id) args.push("--intent-id", p.intent_id);
+      if (p.status) args.push("--status", p.status);
+      if (p.evidence_run) args.push("--evidence-run", String(p.evidence_run));
+      return result(await runCli(args, signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_fact", label: "CTF: 사실 기록", description: "Record an observed or inferred fact linked to a real tool run and optional intent.",
+    parameters: Type.Object({
+      challenge_id: Type.String(), summary: Type.String(), detail: Type.Optional(Type.String()),
+      evidence_run: Type.Integer({ minimum: 1 }), intent_id: Type.Optional(Type.String()),
+      confidence: Type.Optional(Type.Union([Type.Literal("observed"), Type.Literal("inferred")])),
+    }),
+    async execute(_id, p, signal, _onUpdate, _ctx) {
+      const args = ["fact", p.challenge_id, "--summary", p.summary, "--evidence-run", String(p.evidence_run)];
+      if (p.detail) args.push("--detail", p.detail);
+      if (p.intent_id) args.push("--intent-id", p.intent_id);
+      if (p.confidence) args.push("--confidence", p.confidence);
+      return result(await runCli(args, signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_candidate", label: "CTF: 후보 기록",
+    description: "Submit a candidate from this intent and a successful evidence run for independent verification. This does not mark the task solved.",
+    parameters: Type.Object({
+      challenge_id: Type.String(), intent_id: Type.String(), value: Type.String(),
+      kind: Type.Union([Type.Literal("flag"), Type.Literal("local_solution")]),
+      evidence_run: Type.Integer({ minimum: 1 }),
+    }),
+    async execute(_id, p, signal) {
+      return result(await runCli(["candidate", p.challenge_id, "--intent-id", p.intent_id,
+        "--value", p.value, "--kind", p.kind, "--evidence-run", String(p.evidence_run)], signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_candidate_context", label: "CTF: 검증할 후보",
+    description: "Verifier-only: read one pending candidate and the proposal evidence.",
+    parameters: Type.Object({ challenge_id: Type.String(), candidate_id: Type.Integer({ minimum: 1 }) }),
+    async execute(_id, p, signal) {
+      return result(await runCli(["candidate-context", p.challenge_id, "--candidate-id", String(p.candidate_id)], signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_verify_candidate", label: "CTF: 후보 검증 결과",
+    description: "Verifier-only: confirm a candidate using a separate successful review run, or reject it.",
+    parameters: Type.Object({
+      challenge_id: Type.String(), candidate_id: Type.Integer({ minimum: 1 }),
+      evidence_run: Type.Integer({ minimum: 1 }),
+      verdict: Type.Union([Type.Literal("confirmed"), Type.Literal("rejected")]),
+    }),
+    async execute(_id, p, signal) {
+      return result(await runCli(["verify-candidate", p.challenge_id, "--candidate-id", String(p.candidate_id),
+        "--evidence-run", String(p.evidence_run), "--verdict", p.verdict], signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_read_file", label: "CTF: 작업 파일 읽기",
+    description: "Read a small text file in original/ or this intent's private work directory.",
+    parameters: Type.Object({ challenge_id: Type.String(), path: Type.String() }),
+    async execute(_id, p, signal) {
+      return result(await runCli(["file-read", p.challenge_id, "--path", p.path], signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_write_file", label: "CTF: 작업 파일 쓰기",
+    description: "Write a text file in this intent's private work directory. Use reverser_exec to run it in Docker.",
+    parameters: Type.Object({ challenge_id: Type.String(), path: Type.String(), content: Type.String() }),
+    async execute(_id, p, signal) {
+      return result(await runCli(["file-write", p.challenge_id, "--path", p.path, "--content", p.content], signal));
+    },
+  });
+  pi.registerTool({
+    name: "reverser_review_exec", label: "CTF: 독립 재검증", description: "Run a fresh isolated verification command for the assigned candidate without changing the result status.",
     parameters: Type.Object({ challenge_id: Type.String(), profile: Type.Union([Type.Literal("core"), Type.Literal("dynamic"), Type.Literal("ghidra"), Type.Literal("angr")]), command: Type.String(), timeout: Type.Optional(Type.Integer({ minimum: 1, maximum: 7200 })) }),
     async execute(_id, p, signal, _onUpdate, _ctx) {
       const args = ["review-exec", p.challenge_id, "--profile", p.profile, "--command", p.command];

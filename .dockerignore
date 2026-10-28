@@ -1,0 +1,13 @@
+.git
+.private
+runs
+node_modules
+tests
+doc
+writeups
+dashboard.html
+__pycache__
+*.pyc
+.env
+.env.*
+memory/index.sqlite*

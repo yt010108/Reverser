@@ -73,6 +73,31 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("flags", projected)
         self.assertEqual(projected["flag_candidates"], 1)
 
+    def test_intent_and_fact_keep_their_run_evidence(self):
+        class Worker:
+            def run(self, *, profile, command, **_kwargs):
+                return CommandResult(profile, command, 0, "ELF 64-bit", "")
+
+        state = self.store.create(title="Evidence chain", platform_url="")
+        state["status"] = "solving"
+        self.store.save(state)
+        challenge_id = state["challenge_id"]
+        intent = self.store.add_intent(challenge_id, "파일 형식 확인")
+        Analyzer(self.store, Worker()).run_command(
+            challenge_id, "core", "file sample", intent_id=intent["id"]
+        )
+        fact = self.store.record_fact(
+            challenge_id, "64비트 ELF", "file 출력으로 확인", 1, intent["id"]
+        )
+        self.store.finish_intent(challenge_id, intent["id"], "done", 1)
+        saved = self.store.load(challenge_id)
+        self.assertEqual(saved["intents"][0]["evidence_runs"], [1])
+        self.assertEqual(saved["tool_runs"][0]["intent_id"], intent["id"])
+        self.assertEqual(fact["evidence_run"], 1)
+        self.assertIn("## Intent chain", (self.store.challenge_dir(challenge_id) / "progress.md").read_text(encoding="utf-8"))
+        with self.assertRaises(ValueError):
+            self.store.record_fact(challenge_id, "근거 없음", "", 9, intent["id"])
+
     def test_solution_notes_are_only_for_researched_or_unsolved_challenges(self):
         state = self.store.create(title="Memory Test", platform_url="")
         memory = TechniqueMemory(self.root, self.store)

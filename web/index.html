@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="reverser-token" content="__REVERSER_TOKEN__">
+  <title>Reverser · CTF 작업실</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/v2.css">
+  <link rel="stylesheet" href="/static/artex.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside id="appSidebar" class="sidebar">
+      <div class="sidebar-brand"><span class="brand-symbol">⌁</span><span>REVERSER</span><button id="sidebarClose" class="sidebar-close" type="button" aria-label="메뉴 닫기">×</button></div>
+      <div class="sidebar-nav">
+        <p class="nav-caption">기능</p>
+        <button id="tasksNav" class="nav-item selected" type="button"><span class="nav-icon">▦</span>작업</button>
+        <button id="newButton" class="nav-item" type="button"><span class="nav-icon">＋</span>새 작업</button>
+      </div>
+      <div class="sidebar-heading"><span>작업 목록</span><span id="challengeCount" class="count">0</span></div>
+      <div id="challengeList" class="challenge-list"><p class="muted pad">문제를 불러오는 중</p></div>
+      <div class="sidebar-footer">
+        <p class="nav-caption">시스템</p>
+        <button id="settingsButton" class="nav-item" type="button"><span class="nav-icon">✧</span>LLM 설정</button>
+        <span id="serviceStatus" class="service-status"><span class="dot"></span>연결 확인 중</span>
+        <div class="sidebar-account"><span class="account-avatar">R</span><span>Reverser</span></div>
+      </div>
+    </aside>
+
+    <div class="workspace-shell">
+      <main class="main">
+        <section id="emptyView" class="empty-view">
+          <div class="empty-heading"><button id="emptySidebarToggle" class="header-icon" type="button" aria-label="메뉴 열기">☰</button><span>작업</span></div>
+          <div class="empty-center"><div class="empty-icon">⌁</div><h1>CTF 리버싱 작업</h1><p>문제 파일을 등록하면 플래너와 작업자 세션에서 분석 과정과 근거를 확인할 수 있습니다.</p><button id="emptyNewButton" class="primary" type="button">＋ 새 작업 만들기</button></div>
+        </section>
+
+        <section id="detailView" class="detail-view" hidden>
+          <header class="detail-top">
+            <div class="detail-mainrow">
+              <button id="sidebarToggle" class="header-icon" type="button" aria-label="메뉴 접기">◫</button>
+              <button id="backButton" class="header-icon" type="button" aria-label="작업 목록으로">←</button>
+              <h1 id="detailTitle"></h1>
+              <code id="detailId" class="detail-id"></code>
+              <span class="header-divider"></span>
+              <button id="detailSettingsButton" class="secondary model-button" type="button">♧ <span id="detailModel">모델 설정</span></button>
+              <span id="detailStatus" class="status"></span>
+              <button id="stopButton" class="secondary" type="button" hidden>Ⅱ 일시정지</button>
+              <button id="solveButton" class="secondary" type="button">▷ 풀이 시작</button>
+            </div>
+            <p id="detailMeta" class="detail-description"></p>
+            <nav class="tabs" aria-label="문제 상세 보기">
+              <button class="tab active" data-tab="sessions" type="button">세션</button>
+              <button class="tab" data-tab="overview" type="button">개요</button>
+              <button class="tab" data-tab="graph" type="button">탐색 경로</button>
+              <button class="tab" data-tab="facts" type="button">사실</button>
+              <button class="tab" data-tab="activity" type="button">근거 실행</button>
+              <button class="tab" data-tab="candidates" type="button">재검증</button>
+              <button class="tab" data-tab="files" type="button">자료</button>
+              <button class="tab" data-tab="report" type="button">보고서</button>
+            </nav>
+          </header>
+
+          <div class="content-card">
+            <div id="sessionsTab" class="tab-pane sessions-layout">
+              <aside class="session-rail">
+                <div class="session-rail-head"><strong>세션 목록</strong><span id="sessionState" class="live-state">대기</span><small id="sessionTokens">작업 합계 · 입 0 · 캐 0 · 출 0</small></div>
+                <div id="sessionList" class="session-list"></div>
+              </aside>
+              <div class="session-main">
+                <div class="session-heading"><div class="session-heading-title"><h2 id="sessionTitle">메인 에이전트 · 대화 세션</h2><p id="sessionSubtitle"></p></div><span id="sessionBadge" class="status">준비됨</span></div>
+                <div id="sessionFeed" class="session-feed"></div>
+                <form id="chatForm" class="session-composer"><textarea id="chatMessage" rows="1" maxlength="4000" placeholder="메인 에이전트에게 메시지를 보내 분석 방향을 안내하세요..."></textarea><button class="composer-send" type="submit" aria-label="보내기">➤</button></form>
+              </div>
+            </div>
+
+            <div id="overviewTab" class="tab-pane" hidden>
+              <div class="summary-grid"><div class="summary-card"><span>의도</span><strong id="intentCount">0</strong><small>분석 방향</small></div><div class="summary-card"><span>사실</span><strong id="factCount">0</strong><small>실행 근거</small></div><div class="summary-card"><span>가설</span><strong id="hypothesisCount">0</strong><small>검증 상태</small></div><div class="summary-card"><span>실행</span><strong id="runCount">0</strong><small>격리 분석 기록</small></div></div>
+              <div class="section-heading"><div><h2>작업 개요</h2><p>제공된 자료와 현재 목표입니다.</p></div></div><div id="overviewContent" class="overview-content"></div>
+            </div>
+
+            <div id="graphTab" class="tab-pane graph-layout" hidden>
+              <div class="graph-main"><div class="graph-stage">
+                <div id="graphViewport" class="graph-viewport"></div>
+                <div class="graph-key"><div class="graph-key-types"><span><i class="key-icon challenge">⚑</i>시작점</span><span><i class="key-icon goal">◎</i>목표</span><span><i class="key-icon intent">⊙</i>의도</span><span><i class="key-icon fact">♙</i>사실</span><span><i class="key-icon hypothesis">◇</i>가설</span><span><i class="key-icon candidate">✦</i>후보</span></div><div class="graph-key-edges"><span><i class="key-line derived"></i>파생</span><span><i class="key-line planned"></i>의도 체인</span><span><i class="key-line observed"></i>산출</span><span><i class="key-line verified"></i>검증</span></div></div>
+                <div class="graph-controls"><button id="graphZoomIn" type="button" aria-label="확대">＋</button><button id="graphZoomOut" type="button" aria-label="축소">－</button><button id="graphFit" type="button" aria-label="전체 보기">⛶</button></div>
+                <div id="graphMiniMap" class="graph-mini-map" aria-label="그래프 미리보기"></div>
+              </div></div>
+              <aside id="nodeInspector" class="inspector" hidden></aside>
+            </div>
+
+            <div id="factsTab" class="tab-pane" hidden><div class="section-heading"><div><h2>사실과 가설</h2><p>작업자가 근거 실행에 연결한 관찰과 검증 상태입니다.</p></div></div><div id="factList" class="fact-list"></div></div>
+            <div id="activityTab" class="tab-pane" hidden><div class="section-heading"><div><h2>근거 실행</h2><p>격리 Docker 작업자의 명령과 결과입니다.</p></div></div><div id="liveEvents" class="live-events"></div><div id="runList" class="run-list"></div></div>
+            <div id="candidatesTab" class="tab-pane" hidden><div class="section-heading"><div><h2>후보 재검증</h2><p>별도 작업자가 같은 결과를 재현합니다. 실제 값은 숨깁니다.</p></div></div><div id="candidateList" class="candidate-list"></div></div>
+            <div id="filesTab" class="tab-pane" hidden><div class="section-heading"><div><h2>문제 자료</h2><p>원본 파일과 분석 산출물입니다.</p></div></div><div id="fileList" class="file-list"></div></div>
+            <div id="reportTab" class="tab-pane" hidden><div class="section-heading"><div><h2>작업 보고서</h2><p>현재 저장된 결과와 근거를 요약합니다.</p></div></div><div id="reportContent" class="report-content"></div></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="newDialog" class="modal"><form id="newForm"><div class="modal-heading"><div><p class="eyebrow">새 작업</p><h2>리버싱 문제 추가</h2></div><button class="close-button" type="button" aria-label="닫기">×</button></div><label>문제 이름<input name="title" required maxlength="160" placeholder="예: rev-basic-1"></label><div class="form-row"><label>대회 이름 (선택)<input name="event" maxlength="100" placeholder="예: CTF 2026"></label><label>문제 URL (선택)<input name="platform_url" type="url" placeholder="https://..."></label></div><label>문제 설명<textarea name="description" rows="5" maxlength="20000" placeholder="문제에서 제공된 설명을 붙여 넣으세요."></textarea></label><label>문제 파일<input name="files" type="file" multiple required></label><p class="form-hint">최대 8개, 합계 128 MiB. 파일은 비공개 작업 공간에 저장됩니다.</p><div class="modal-actions"><button id="cancelNew" class="secondary" type="button">취소</button><button class="primary" type="submit">문제 만들기</button></div></form></dialog>
+  <dialog id="settingsDialog" class="modal"><form id="settingsForm"><div class="modal-heading"><div><p class="eyebrow">LLM</p><h2>모델 연결</h2></div><button class="close-button" type="button" aria-label="닫기">×</button></div><div class="auth-choice"><label><input type="radio" name="auth_mode" value="oauth"> 기존 Pi 로그인 <small id="oauthState"></small></label><label><input type="radio" name="auth_mode" value="api_key"> OpenAI API 키</label></div><div id="oauthFields"><label>Pi 모델 (선택)<input name="oauth_model" placeholder="비우면 Pi 기본 모델 사용"></label></div><div id="apiFields" hidden><label>모델<input name="api_model" placeholder="openai/gpt-5.1"></label><label>API 키<input name="api_key" type="password" autocomplete="off" placeholder="저장된 키가 있으면 비워 두어도 됩니다"></label><p id="apiKeyState" class="form-hint"></p><label class="checkbox"><input name="clear_api_key" type="checkbox"> 저장된 API 키 삭제</label></div><div class="modal-actions"><button id="cancelSettings" class="secondary" type="button">취소</button><button class="primary" type="submit">설정 저장</button></div></form></dialog>
+  <dialog id="runDialog" class="modal log-modal"><div class="modal-heading"><div><p class="eyebrow">근거 실행</p><h2 id="runDialogTitle">실행 기록</h2></div><button id="closeRun" class="close-button" type="button" aria-label="닫기">×</button></div><pre id="runOutput"></pre></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
